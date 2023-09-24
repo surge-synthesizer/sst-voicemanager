@@ -19,11 +19,12 @@ if (${bldtest})
     add_executable(${PROJECT_NAME}-test
             tests/main.cpp
             tests/basic.cpp
+
+            tests/basic_poly.cpp
         )
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         target_compile_options(${PROJECT_NAME}-test PRIVATE -Wall -Wextra -Wno-unused-parameter -Wpedantic -Werror)
     endif()
-    target_compile_definitions(${PROJECT_NAME}-test PRIVATE CATCH_CONFIG_DISABLE_EXCEPTIONS=1)
     target_link_libraries(${PROJECT_NAME}-test PRIVATE ${PROJECT_NAME})
 endif ()

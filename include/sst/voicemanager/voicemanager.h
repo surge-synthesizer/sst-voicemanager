@@ -15,6 +15,95 @@
 #ifndef INCLUDE_SST_VOICEMANAGER_VOICEMANAGER_H
 #define INCLUDE_SST_VOICEMANAGER_VOICEMANAGER_H
 
-// bar
+#include <array>
+
+#include "managers/polymanager.h"
+
+namespace sst::voicemanager
+{
+template<typename Cfg, typename Responder>
+struct VoiceManager
+{
+    enum VoiceMode
+    {
+        POLY
+    } voiceMode{POLY};
+
+    Responder &responder;
+    VoiceManager(Responder &r) : responder(r), polyManager(r) {
+        polyManager.registerVoiceEndCallback();
+    }
+
+    void setVoiceMode(VoiceMode m)
+    {
+        // reset current, replace callback function on responder, etc...
+        responder.stopAllVoices();
+        voiceMode = m;
+        switch(voiceMode)
+        {
+        case POLY:
+            polyManager.registerVoiceEndCallback();
+        }
+
+    }
+
+    bool processNoteOnEvent(uint16_t port,
+                            uint16_t channel,
+                            uint16_t key,
+                            int32_t noteid,
+                            float velocity,
+                            float retune)
+    {
+        switch(voiceMode)
+        {
+        case POLY:
+            return polyManager.processNoteOnEvent(port, channel, key, noteid, velocity, retune);
+        }
+
+        return false;
+    }
+
+    void processNoteOffEvent(uint16_t port,
+                            uint16_t channel,
+                            uint16_t key,
+                            int32_t noteid,
+                            float velocity)
+    {
+        switch(voiceMode)
+        {
+        case POLY:
+            polyManager.processNoteOffEvent(port, channel, key, noteid, velocity);
+        }
+    }
+
+    size_t getVoiceCount() {
+        switch(voiceMode)
+        {
+        case POLY:
+            return polyManager.getVoiceCount();
+        }
+        assert(false);
+        return 0;
+    }
+
+    size_t getGatedVoiceCount() {
+        switch(voiceMode)
+        {
+        case POLY:
+            return polyManager.getGatedVoiceCount();
+        }
+        assert(false);
+        return 0;
+    }
+
+    static float midiToFloatVelocity(uint8_t vel)
+    {
+        return 1.f * vel / 127.f;
+    }
+
+    using polymanager_t = sst::voicemanager::managers::PolyManager<Cfg, Responder>;
+    polymanager_t polyManager;
+};
+}
 
 #endif // INCLUDE_SST_VOICEMANAGER_VOICEMANAGER_H
