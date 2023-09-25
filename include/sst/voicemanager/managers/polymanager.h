@@ -20,7 +20,7 @@ struct PolyManager
 
         bool gated{false};
 
-        void *activeVoiceCookie{nullptr};
+        typename Cfg::voice_t *activeVoiceCookie{nullptr};
     };
     std::array<VoiceInfo, Cfg::maxVoiceCount> voiceInfo;
 
@@ -29,7 +29,7 @@ struct PolyManager
 
     void registerVoiceEndCallback()
     {
-        responder.setVoiceEndCallback([this](void *t) {
+        responder.setVoiceEndCallback([this](typename Cfg::voice_t *t) {
                                           endVoice(t);
         });
     }
@@ -102,6 +102,10 @@ struct PolyManager
 
                 vi.gated = true;
                 vi.activeVoiceCookie = responder.initializeVoice(port, channel, key, noteid, velocity, retune);
+                if (lastPBByChannel[channel] != 0)
+                {
+                    responder.setVoiceMIDIPitchBend(vi.activeVoiceCookie, lastPBByChannel[channel] + 8192);
+                }
                 return true;
             }
         }
@@ -120,7 +124,7 @@ struct PolyManager
         for (auto &vi : voiceInfo)
         {
             if (vi.port == port && vi.channel == channel && vi.key == key
-                && vi.noteId == noteid)
+                && (vi.noteId == noteid || noteid == -1))
             {
                 responder.releaseVoice(vi.activeVoiceCookie, velocity);
                 vi.gated = false;
@@ -144,13 +148,26 @@ struct PolyManager
         return res;
     }
 
-    void endVoice(void *v)
+    void endVoice(typename Cfg::voice_t *v)
     {
         for (auto &vi : voiceInfo)
         {
             if (vi.activeVoiceCookie == v)
             {
                 vi.activeVoiceCookie = nullptr;
+            }
+        }
+    }
+
+    std::array<uint16_t, 16> lastPBByChannel;
+    void routeMIDIPitchBend(uint16_t port, uint16_t channel, uint16_t pb14bit)
+    {
+        lastPBByChannel[channel] = pb14bit - 8192;
+        for (auto &vi : voiceInfo)
+        {
+            if (vi.port == port && vi.channel == channel && vi.activeVoiceCookie)
+            {
+                responder.setVoiceMIDIPitchBend(vi.activeVoiceCookie, pb14bit);
             }
         }
     }

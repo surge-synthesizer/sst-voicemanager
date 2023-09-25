@@ -12,6 +12,7 @@
 // voice manager config
 struct Config
 {
+    using voice_t = void;
     static constexpr size_t maxVoiceCount{32};
 };
 
@@ -33,6 +34,8 @@ struct ConcreteResp
     }
     void retriggerVoiceWithNewNoteID(void *v, int32_t noteid, float velocity) {
     }
+
+    void setVoiceMIDIPitchBend(void *v, uint16_t) {}
 
     // Innards
     struct Innards

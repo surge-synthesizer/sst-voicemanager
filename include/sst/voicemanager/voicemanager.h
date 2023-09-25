@@ -76,6 +76,15 @@ struct VoiceManager
         }
     }
 
+    void routeMIDIPitchBend(uint16_t port, uint16_t channel, uint16_t pb14bit)
+    {
+        switch(voiceMode)
+        {
+        case POLY:
+            polyManager.routeMIDIPitchBend(port, channel, pb14bit);
+        }
+    }
+
     size_t getVoiceCount() {
         switch(voiceMode)
         {
