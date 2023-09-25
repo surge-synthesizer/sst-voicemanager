@@ -20,16 +20,16 @@ struct ConcreteResp
 {
     // API
     void setVoiceEndCallback(std::function<void(void*)> f) {
-        innards.vec = f;
+        innards.voiceEndCallback = f;
     }
 
     void stopAllVoices() {}
     void* initializeVoice(uint16_t port, uint16_t channel, uint16_t key, int32_t noteId,
                          float velocity, float retune) {
-        return innards.newv(port, channel, key, noteId, velocity, retune);
+        return innards.newVoice(port, channel, key, noteId, velocity, retune);
     }
     void releaseVoice(void *v, float velocity) {
-        innards.rel(v, velocity);
+        innards.release(v, velocity);
     }
     void retriggerVoiceWithNewNoteID(void *v, int32_t noteid, float velocity) {
     }
@@ -37,24 +37,26 @@ struct ConcreteResp
     // Innards
     struct Innards
     {
-        std::function<void(void *)> vec;
+        std::function<void(void *)> voiceEndCallback;
 
         struct VoiceImpl {
+            bool playing{false};
             bool released{false};
             int deadCount = 0;
         };
 
         std::set<VoiceImpl *> voices;
 
-        void* newv(uint16_t port, uint16_t channel, uint16_t key, int32_t noteId,
+        void* newVoice(uint16_t port, uint16_t channel, uint16_t key, int32_t noteId,
                               float velocity, float retune)
         {
             auto v = new VoiceImpl();
+            v->playing = true;
             voices.insert(v);
             return v;
         }
 
-        void rel(void *v, float fel)
+        void release(void *v, float fel)
         {
             auto vi = static_cast<VoiceImpl *>(v);
             vi->released = true;
@@ -65,13 +67,15 @@ struct ConcreteResp
             while (vit !=voices.end())
             {
                 auto *vi = *vit;
+
                 if (vi->released)
                 {
-                    vi->deadCount --;
+                    vi->deadCount--;
                 }
-                if (vi->deadCount == 0)
+                if (vi->released && vi->deadCount == 0)
                 {
-                    vec(vi);
+                    voiceEndCallback(vi);
+                    vi->playing = false;
                     vit = voices.erase(vit);
                 }
                 else
@@ -101,6 +105,12 @@ TEST_CASE("Basic Poly Note On Note Off")
         vm.processNoteOnEvent(port, channel, key, noteid, vm.midiToFloatVelocity(velocity), retune);
         REQUIRE(vm.getVoiceCount() == 1);
         REQUIRE(vm.getGatedVoiceCount() == 1);
+
+        // process to voice end, see message come back and voice drop and gated voice stay down
+        for (auto i=0U; i<10; ++i)
+        {
+            concreteResp.innards.process();
+        }
 
         // send a midi message note off, see voice stay constant but gated voice drop down
         vm.processNoteOffEvent(port, channel, key, noteid, velocity);
