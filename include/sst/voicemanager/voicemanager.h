@@ -21,8 +21,7 @@
 
 namespace sst::voicemanager
 {
-template<typename Cfg, typename Responder>
-struct VoiceManager
+template <typename Cfg, typename Responder> struct VoiceManager
 {
     enum VoiceMode
     {
@@ -30,7 +29,8 @@ struct VoiceManager
     } voiceMode{POLY};
 
     Responder &responder;
-    VoiceManager(Responder &r) : responder(r), polyManager(r) {
+    VoiceManager(Responder &r) : responder(r), polyManager(r)
+    {
         polyManager.registerVoiceEndCallback();
     }
 
@@ -39,22 +39,17 @@ struct VoiceManager
         // reset current, replace callback function on responder, etc...
         responder.stopAllVoices();
         voiceMode = m;
-        switch(voiceMode)
+        switch (voiceMode)
         {
         case POLY:
             polyManager.registerVoiceEndCallback();
         }
-
     }
 
-    bool processNoteOnEvent(uint16_t port,
-                            uint16_t channel,
-                            uint16_t key,
-                            int32_t noteid,
-                            float velocity,
-                            float retune)
+    bool processNoteOnEvent(int16_t port, int16_t channel, int16_t key, int32_t noteid,
+                            float velocity, float retune)
     {
-        switch(voiceMode)
+        switch (voiceMode)
         {
         case POLY:
             return polyManager.processNoteOnEvent(port, channel, key, noteid, velocity, retune);
@@ -63,30 +58,49 @@ struct VoiceManager
         return false;
     }
 
-    void processNoteOffEvent(uint16_t port,
-                            uint16_t channel,
-                            uint16_t key,
-                            int32_t noteid,
-                            float velocity)
+    void processNoteOffEvent(int16_t port, int16_t channel, int16_t key, int32_t noteid,
+                             float velocity)
     {
-        switch(voiceMode)
+        switch (voiceMode)
         {
         case POLY:
             polyManager.processNoteOffEvent(port, channel, key, noteid, velocity);
         }
     }
 
-    void routeMIDIPitchBend(uint16_t port, uint16_t channel, uint16_t pb14bit)
+    void routeMIDIPitchBend(int16_t port, int16_t channel, int16_t pb14bit)
     {
-        switch(voiceMode)
+        switch (voiceMode)
         {
         case POLY:
             polyManager.routeMIDIPitchBend(port, channel, pb14bit);
         }
     }
 
-    size_t getVoiceCount() {
-        switch(voiceMode)
+    void routeNoteExpression(int16_t port, int16_t channel, int16_t key, int32_t noteid,
+                             int32_t expression, float value)
+    {
+        switch (voiceMode)
+        {
+        case POLY:
+            polyManager.routeNoteExpression(port, channel, key, noteid, expression, value);
+        }
+    }
+
+    void routePolyphonicParameterModulation(int16_t port, int16_t channel, int16_t key,
+                                            int32_t noteid, uint32_t parameter, double value)
+    {
+        switch (voiceMode)
+        {
+        case POLY:
+            polyManager.routePolyphonicParameterModulation(port, channel, key, noteid, parameter,
+                                                           value);
+        }
+    }
+
+    size_t getVoiceCount()
+    {
+        switch (voiceMode)
         {
         case POLY:
             return polyManager.getVoiceCount();
@@ -95,8 +109,9 @@ struct VoiceManager
         return 0;
     }
 
-    size_t getGatedVoiceCount() {
-        switch(voiceMode)
+    size_t getGatedVoiceCount()
+    {
+        switch (voiceMode)
         {
         case POLY:
             return polyManager.getGatedVoiceCount();
@@ -105,14 +120,11 @@ struct VoiceManager
         return 0;
     }
 
-    static float midiToFloatVelocity(uint8_t vel)
-    {
-        return 1.f * vel / 127.f;
-    }
+    static float midiToFloatVelocity(uint8_t vel) { return 1.f * vel / 127.f; }
 
     using polymanager_t = sst::voicemanager::managers::PolyManager<Cfg, Responder>;
     polymanager_t polyManager;
 };
-}
+} // namespace sst::voicemanager
 
 #endif // INCLUDE_SST_VOICEMANAGER_VOICEMANAGER_H

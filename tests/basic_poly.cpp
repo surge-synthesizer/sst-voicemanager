@@ -1,13 +1,23 @@
-//
-// Created by Paul Walker on 9/24/23.
-//
+/*
+ * sst-voicemanager - a header only library providing synth
+ * voice management in response to midi and clap event streams
+ * with support for a variety of play, trigger, and midi nodes
+ *
+ * Copyright 2023, various authors, as described in the GitHub
+ * transaction log.
+ *
+ * sst-voicemanager is released under the MIT license, available
+ * as LICENSE.md in the root of this repository.
+ *
+ * All source in sst-voicemanager available at
+ * https://github.com/surge-synthesizer/sst-voicemanager
+ */
 
 #include <functional>
 #include "catch2.hpp"
 
 #include "sst/voicemanager/voicemanager.h"
 #include <set>
-
 
 // voice manager config
 struct Config
@@ -20,20 +30,16 @@ struct Config
 struct ConcreteResp
 {
     // API
-    void setVoiceEndCallback(std::function<void(void*)> f) {
-        innards.voiceEndCallback = f;
-    }
+    void setVoiceEndCallback(std::function<void(void *)> f) { innards.voiceEndCallback = f; }
 
     void stopAllVoices() {}
-    void* initializeVoice(uint16_t port, uint16_t channel, uint16_t key, int32_t noteId,
-                         float velocity, float retune) {
+    void *initializeVoice(uint16_t port, uint16_t channel, uint16_t key, int32_t noteId,
+                          float velocity, float retune)
+    {
         return innards.newVoice(port, channel, key, noteId, velocity, retune);
     }
-    void releaseVoice(void *v, float velocity) {
-        innards.release(v, velocity);
-    }
-    void retriggerVoiceWithNewNoteID(void *v, int32_t noteid, float velocity) {
-    }
+    void releaseVoice(void *v, float velocity) { innards.release(v, velocity); }
+    void retriggerVoiceWithNewNoteID(void *v, int32_t noteid, float velocity) {}
 
     void setVoiceMIDIPitchBend(void *v, uint16_t) {}
 
@@ -42,7 +48,8 @@ struct ConcreteResp
     {
         std::function<void(void *)> voiceEndCallback;
 
-        struct VoiceImpl {
+        struct VoiceImpl
+        {
             bool playing{false};
             bool released{false};
             int deadCount = 0;
@@ -50,8 +57,8 @@ struct ConcreteResp
 
         std::set<VoiceImpl *> voices;
 
-        void* newVoice(uint16_t port, uint16_t channel, uint16_t key, int32_t noteId,
-                              float velocity, float retune)
+        void *newVoice(uint16_t port, uint16_t channel, uint16_t key, int32_t noteId,
+                       float velocity, float retune)
         {
             auto v = new VoiceImpl();
             v->playing = true;
@@ -65,9 +72,10 @@ struct ConcreteResp
             vi->released = true;
             vi->deadCount = 5;
         }
-        void process() {
+        void process()
+        {
             auto vit = voices.begin();
-            while (vit !=voices.end())
+            while (vit != voices.end())
             {
                 auto *vi = *vit;
 
@@ -83,7 +91,7 @@ struct ConcreteResp
                 }
                 else
                 {
-                    vit ++;
+                    vit++;
                 }
             }
         }
@@ -110,7 +118,7 @@ TEST_CASE("Basic Poly Note On Note Off")
         REQUIRE(vm.getGatedVoiceCount() == 1);
 
         // process to voice end, see message come back and voice drop and gated voice stay down
-        for (auto i=0U; i<10; ++i)
+        for (auto i = 0U; i < 10; ++i)
         {
             concreteResp.innards.process();
         }
@@ -121,7 +129,7 @@ TEST_CASE("Basic Poly Note On Note Off")
         REQUIRE(vm.getGatedVoiceCount() == 0);
 
         // process to voice end, see message come back and voice drop and gated voice stay down
-        for (auto i=0U; i<10; ++i)
+        for (auto i = 0U; i < 10; ++i)
         {
             concreteResp.innards.process();
         }
