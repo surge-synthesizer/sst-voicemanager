@@ -196,8 +196,16 @@ template <typename Cfg, typename Responder> struct PolyManager
     void scanForPolyLimit() {}
 
     void routeNoteExpression(int16_t port, int16_t channel, int16_t key, int32_t noteid,
-                             int32_t expression, float value)
+                             int32_t expression, double value)
     {
+        for (auto &vi : voiceInfo)
+        {
+            if (vi.matches(port, channel, key,
+                           noteid)) // all keys and notes on a channel for midi PB
+            {
+                responder.setNoteExpression(vi.activeVoiceCookie, expression, value);
+            }
+        }
     }
 
     void routePolyphonicParameterModulation(int16_t port, int16_t channel, int16_t key,
