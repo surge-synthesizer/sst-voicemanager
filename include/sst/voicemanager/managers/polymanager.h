@@ -29,6 +29,7 @@ template <typename Cfg, typename Responder> struct PolyManager
         int32_t noteId{-1};
 
         bool gated{false};
+        bool gatedDueToSustain{false};
 
         typename Cfg::voice_t *activeVoiceCookie{nullptr};
 
@@ -122,6 +123,7 @@ template <typename Cfg, typename Responder> struct PolyManager
                 vi.noteId = noteid;
 
                 vi.gated = true;
+                vi.gatedDueToSustain = false;
                 vi.activeVoiceCookie =
                     responder.initializeVoice(port, channel, key, noteid, velocity, retune);
                 if (lastPBByChannel[channel] != 0)
@@ -145,8 +147,15 @@ template <typename Cfg, typename Responder> struct PolyManager
         {
             if (vi.matches(port, channel, key, noteid))
             {
-                responder.releaseVoice(vi.activeVoiceCookie, velocity);
-                vi.gated = false;
+                if (sustainOn)
+                {
+                    vi.gatedDueToSustain = true;
+                }
+                else
+                {
+                    responder.releaseVoice(vi.activeVoiceCookie, velocity);
+                    vi.gated = false;
+                }
             }
         }
     }
@@ -189,6 +198,29 @@ template <typename Cfg, typename Responder> struct PolyManager
             if (vi.matches(port, channel, -1, -1)) // all keys and notes on a channel for midi PB
             {
                 responder.setVoiceMIDIPitchBend(vi.activeVoiceCookie, pb14bit);
+            }
+        }
+    }
+
+    bool sustainOn{false};
+    void updateSustainPedal(int16_t port, int16_t channel, int8_t level)
+    {
+        auto sop = sustainOn;
+        sustainOn = level > 64;
+        if (sop != sustainOn)
+        {
+            if (!sustainOn)
+            {
+                // release all voices with sustain gates
+                for (auto vi : voiceInfo)
+                {
+                    if (vi.gatedDueToSustain && vi.matches(port, channel, -1, -1))
+                    {
+                        responder.releaseVoice(vi.activeVoiceCookie, 0);
+                        vi.gated = false;
+                        vi.gatedDueToSustain = false;
+                    }
+                }
             }
         }
     }

@@ -68,6 +68,15 @@ template <typename Cfg, typename Responder> struct VoiceManager
         }
     }
 
+    void updateSustainPedal(int16_t port, int16_t channel, int8_t level)
+    {
+        switch(voiceMode)
+        {
+        case POLY:
+            polyManager.updateSustainPedal(port, channel, level);
+        }
+    }
+
     void routeMIDIPitchBend(int16_t port, int16_t channel, int16_t pb14bit)
     {
         switch (voiceMode)
