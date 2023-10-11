@@ -131,6 +131,16 @@ template <typename Cfg, typename Responder> struct PolyManager
                     responder.setVoiceMIDIPitchBend(vi.activeVoiceCookie,
                                                     lastPBByChannel[channel] + 8192);
                 }
+
+                int cid{0};
+                for (auto &mcc : midiCCCache[channel])
+                {
+                    if (mcc != 0)
+                    {
+                        responder.setMIDI1CC(vi.activeVoiceCookie, cid, mcc);
+                    }
+                    cid++;
+                }
                 return true;
             }
         }
@@ -250,6 +260,41 @@ template <typename Cfg, typename Responder> struct PolyManager
             {
                 responder.setVoicePolyphonicParameterModulation(vi.activeVoiceCookie, parameter,
                                                                 value);
+            }
+        }
+    }
+
+    std::array<std::array<uint16_t, 128>, 16> midiCCCache{};
+
+    void routeMIDI1CC(int16_t port, int16_t channel, int8_t cc, int8_t val)
+    {
+        midiCCCache[channel][cc] = val;
+        for (auto &vi : voiceInfo)
+        {
+            if (vi.matches(port, channel, -1, -1)) // all keys and notes on a channel for midi PB
+            {
+                responder.setMIDI1CC(vi.activeVoiceCookie, cc, val);
+            }
+        }
+    }
+    void routePolyphonicAftertouch(int16_t port, int16_t channel, int16_t key, int8_t pat)
+    {
+        for (auto &vi : voiceInfo)
+        {
+            if (vi.matches(port, channel, key, -1)) // all keys and notes on a channel for midi PB
+            {
+                responder.setPolyphonicAftertouch(vi.activeVoiceCookie, pat);
+            }
+        }
+    }
+
+    void routeChannelPressure(int16_t port, int16_t channel, int8_t pat)
+    {
+        for (auto &vi : voiceInfo)
+        {
+            if (vi.matches(port, channel, -1, -1)) // all keys and notes on a channel for midi PB
+            {
+                responder.setChannelPressure(vi.activeVoiceCookie, pat);
             }
         }
     }

@@ -70,7 +70,7 @@ template <typename Cfg, typename Responder> struct VoiceManager
 
     void updateSustainPedal(int16_t port, int16_t channel, int8_t level)
     {
-        switch(voiceMode)
+        switch (voiceMode)
         {
         case POLY:
             polyManager.updateSustainPedal(port, channel, level);
@@ -86,6 +86,32 @@ template <typename Cfg, typename Responder> struct VoiceManager
         }
     }
 
+    void routeMIDI1CC(int16_t port, int16_t channel, int8_t cc, int8_t val)
+    {
+        switch (voiceMode)
+        {
+        case POLY:
+            polyManager.routeMIDI1CC(port, channel, cc, val);
+        }
+    }
+
+    void routePolyphonicAftertouch(int16_t port, int16_t channel, int16_t key, int8_t pat)
+    {
+        switch (voiceMode)
+        {
+        case POLY:
+            polyManager.routePolyphonicAftertouch(port, channel, key, pat);
+        }
+    }
+
+    void routeChannelPressure(int16_t port, int16_t channel, int8_t pat)
+    {
+        switch (voiceMode)
+        {
+        case POLY:
+            polyManager.routeChannelPressure(port, channel, pat);
+        }
+    }
     void routeNoteExpression(int16_t port, int16_t channel, int16_t key, int32_t noteid,
                              int32_t expression, double value)
     {
