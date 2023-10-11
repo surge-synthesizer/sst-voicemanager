@@ -28,6 +28,15 @@ template <typename Cfg, typename Responder> struct VoiceManager
         POLY
     } voiceMode{POLY};
 
+    enum MIDI1Dialect
+    {
+        MIDI1,
+        MIDI1_MPE
+    } dialect{MIDI1};
+
+    int8_t mpeGlobalChannel{0};
+
+
     Responder &responder;
     VoiceManager(Responder &r) : responder(r), polyManager(r)
     {
@@ -82,7 +91,30 @@ template <typename Cfg, typename Responder> struct VoiceManager
         switch (voiceMode)
         {
         case POLY:
-            polyManager.routeMIDIPitchBend(port, channel, pb14bit);
+        {
+            if (dialect == MIDI1)
+            {
+                polyManager.routeMIDIPitchBend(port, channel, pb14bit);
+            }
+            else if (dialect == MIDI1_MPE)
+            {
+                if (channel == mpeGlobalChannel)
+                {
+                    polyManager.routeMIDIPitchBend(port, -1, pb14bit);
+                }
+                else
+                {
+                    polyManager.routeMIDIMPEChannelPitchBend(port, channel, pb14bit);
+                }
+
+            }
+            else
+            {
+                // Code this dialect! What is it even?
+                assert(false);
+            }
+        }
+        break;
         }
     }
 

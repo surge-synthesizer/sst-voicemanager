@@ -62,25 +62,6 @@ template <typename Cfg, typename Responder> struct PolyManager
     }
 
     /*
-     * Are we poly on all channels or on a single channel
-     */
-    enum ChannelMode
-    {
-        OMNI,
-        SINGLE
-    } channelMode{OMNI};
-    uint16_t filterChannel{0};
-
-    void setChannelMode(ChannelMode c, int16_t ch = -1)
-    {
-        channelMode = c;
-        if (channelMode == OMNI)
-        {
-            filterChannel = (uint16_t)ch;
-        }
-    }
-
-    /*
      * If a key is struck twice while still gated or sustained, do we start a new voice
      * or do we re-use the voice (and move the note id)
      */
@@ -95,11 +76,6 @@ template <typename Cfg, typename Responder> struct PolyManager
     bool processNoteOnEvent(int16_t port, int16_t channel, int16_t key, int32_t noteid,
                             float velocity, float retune)
     {
-        if (channelMode == SINGLE && filterChannel != channel)
-        {
-            return false;
-        }
-
         if (repeatedKeyMode == PIANO)
         {
             // First look for a matching PCK
@@ -208,6 +184,17 @@ template <typename Cfg, typename Responder> struct PolyManager
             if (vi.matches(port, channel, -1, -1)) // all keys and notes on a channel for midi PB
             {
                 responder.setVoiceMIDIPitchBend(vi.activeVoiceCookie, pb14bit);
+            }
+        }
+    }
+
+    void routeMIDIMPEChannelPitchBend(int16_t port, int16_t channel, uint16_t pb14bit)
+    {
+        for (auto &vi : voiceInfo)
+        {
+            if (vi.matches(port, channel, -1, -1)) // all keys and notes on a channel for midi PB
+            {
+                responder.setVoiceMIDIMPEChannelPitchBend(vi.activeVoiceCookie, pb14bit);
             }
         }
     }
