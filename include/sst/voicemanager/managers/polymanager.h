@@ -23,10 +23,14 @@ namespace sst::voicemanager::managers
 {
 template <typename Cfg, typename Responder> struct PolyManager
 {
+    int64_t mostRecentNoteCounter{1};
+
     struct VoiceInfo
     {
         int16_t port{0}, channel{0}, key{0};
         int32_t noteId{-1};
+
+        int64_t noteCounter{0};
 
         bool gated{false};
         bool gatedDueToSustain{false};
@@ -44,6 +48,7 @@ template <typename Cfg, typename Responder> struct PolyManager
         }
     };
     std::array<VoiceInfo, Cfg::maxVoiceCount> voiceInfo;
+    std::array<typename Cfg::voice_t *, Cfg::maxVoiceCount> voiceInitWorkingBuffer;
 
     Responder &responder;
     PolyManager(Responder &r) : responder(r) {}
@@ -78,21 +83,46 @@ template <typename Cfg, typename Responder> struct PolyManager
     {
         if (repeatedKeyMode == PIANO)
         {
+            bool didAnyRetrigger{false};
             // First look for a matching PCK
             for (auto &vi : voiceInfo)
             {
+                // FIXME this is wrong in the multi-voice partial steal case
                 if (vi.matches(port, channel, key, -1)) // dont match noteid
                 {
                     responder.retriggerVoiceWithNewNoteID(vi.activeVoiceCookie, noteid, velocity);
-                    return true;
+                    didAnyRetrigger = true;
                 }
+            }
+
+            if (didAnyRetrigger)
+            {
+                return true;
             }
         }
 
+
+        auto voicesToBeLaunched = responder.voiceCountForInitializationAction(port, channel, key, noteid);
+
+        /*
+        if(voicesLaunched + something > somethingElse)
+        {
+            TODO: Stealing. Probably want this before the create loop too.
+        }
+        */
+
+        auto voicesLaunched = responder.initializeMultipleVoices(voiceInitWorkingBuffer, port, channel, key, noteid, velocity, retune);
+        if (voicesLaunched == voicesToBeLaunched)
+        {
+
+        }
+
+        auto voicesLeft = voicesLaunched;
         for (auto &vi : voiceInfo)
         {
             if (!vi.activeVoiceCookie)
             {
+                vi.noteCounter = mostRecentNoteCounter;
                 vi.port = port;
                 vi.channel = channel;
                 vi.key = key;
@@ -100,8 +130,8 @@ template <typename Cfg, typename Responder> struct PolyManager
 
                 vi.gated = true;
                 vi.gatedDueToSustain = false;
-                vi.activeVoiceCookie =
-                    responder.initializeVoice(port, channel, key, noteid, velocity, retune);
+                vi.activeVoiceCookie = voiceInitWorkingBuffer[voicesLeft-1];
+
                 if (lastPBByChannel[channel] != 0)
                 {
                     responder.setVoiceMIDIPitchBend(vi.activeVoiceCookie,
@@ -117,11 +147,12 @@ template <typename Cfg, typename Responder> struct PolyManager
                     }
                     cid++;
                 }
-                return true;
+                voicesLeft --;
+                if (voicesLeft == 0)
+                    return true;
             }
         }
 
-        // TODO: Stealing
 
         return false;
     }
