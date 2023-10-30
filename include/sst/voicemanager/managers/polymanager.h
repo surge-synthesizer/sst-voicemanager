@@ -18,6 +18,7 @@
 
 #include <array>
 #include <cstdint>
+#include <cassert>
 #include <iostream>
 
 namespace sst::voicemanager::managers

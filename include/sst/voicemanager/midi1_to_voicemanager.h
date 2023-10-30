@@ -16,6 +16,8 @@
 #ifndef INCLUDE_SST_VOICEMANAGER_MIDI1_TO_VOICEMANAGER_H
 #define INCLUDE_SST_VOICEMANAGER_MIDI1_TO_VOICEMANAGER_H
 
+#include <cassert>
+
 namespace sst::voicemanager
 {
 template <typename Manager>

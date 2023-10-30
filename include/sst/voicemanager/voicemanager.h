@@ -12,10 +12,12 @@
  * All source in sst-voicemanager available at
  * https://github.com/surge-synthesizer/sst-voicemanager
  */
+
 #ifndef INCLUDE_SST_VOICEMANAGER_VOICEMANAGER_H
 #define INCLUDE_SST_VOICEMANAGER_VOICEMANAGER_H
 
 #include <array>
+#include <cassert>
 
 #include "managers/polymanager.h"
 
