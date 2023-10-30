@@ -18,6 +18,7 @@
 
 #include <array>
 #include <cstdint>
+#include <iostream>
 
 namespace sst::voicemanager::managers
 {
@@ -101,8 +102,11 @@ template <typename Cfg, typename Responder> struct PolyManager
             }
         }
 
+        auto voicesToBeLaunched =
+            responder.voiceCountForInitializationAction(port, channel, key, noteid, velocity);
 
-        auto voicesToBeLaunched = responder.voiceCountForInitializationAction(port, channel, key, noteid);
+        if (voicesToBeLaunched == 0)
+            return true;
 
         /*
         if(voicesLaunched + something > somethingElse)
@@ -111,10 +115,10 @@ template <typename Cfg, typename Responder> struct PolyManager
         }
         */
 
-        auto voicesLaunched = responder.initializeMultipleVoices(voiceInitWorkingBuffer, port, channel, key, noteid, velocity, retune);
+        auto voicesLaunched = responder.initializeMultipleVoices(
+            voiceInitWorkingBuffer, port, channel, key, noteid, velocity, retune);
         if (voicesLaunched == voicesToBeLaunched)
         {
-
         }
 
         auto voicesLeft = voicesLaunched;
@@ -130,7 +134,7 @@ template <typename Cfg, typename Responder> struct PolyManager
 
                 vi.gated = true;
                 vi.gatedDueToSustain = false;
-                vi.activeVoiceCookie = voiceInitWorkingBuffer[voicesLeft-1];
+                vi.activeVoiceCookie = voiceInitWorkingBuffer[voicesLeft - 1];
 
                 if (lastPBByChannel[channel] != 0)
                 {
@@ -147,12 +151,11 @@ template <typename Cfg, typename Responder> struct PolyManager
                     }
                     cid++;
                 }
-                voicesLeft --;
+                voicesLeft--;
                 if (voicesLeft == 0)
                     return true;
             }
         }
-
 
         return false;
     }
@@ -170,8 +173,11 @@ template <typename Cfg, typename Responder> struct PolyManager
                 }
                 else
                 {
-                    responder.releaseVoice(vi.activeVoiceCookie, velocity);
-                    vi.gated = false;
+                    if (vi.gated)
+                    {
+                        responder.releaseVoice(vi.activeVoiceCookie, velocity);
+                        vi.gated = false;
+                    }
                 }
             }
         }

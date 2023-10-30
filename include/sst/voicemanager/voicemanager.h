@@ -36,7 +36,6 @@ template <typename Cfg, typename Responder> struct VoiceManager
 
     int8_t mpeGlobalChannel{0};
 
-
     Responder &responder;
     VoiceManager(Responder &r) : responder(r), polyManager(r)
     {
@@ -106,7 +105,6 @@ template <typename Cfg, typename Responder> struct VoiceManager
                 {
                     polyManager.routeMIDIMPEChannelPitchBend(port, channel, pb14bit);
                 }
-
             }
             else
             {
