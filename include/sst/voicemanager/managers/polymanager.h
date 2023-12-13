@@ -53,7 +53,10 @@ template <typename Cfg, typename Responder> struct PolyManager
     std::array<typename Cfg::voice_t *, Cfg::maxVoiceCount> voiceInitWorkingBuffer;
 
     Responder &responder;
-    PolyManager(Responder &r) : responder(r) {}
+    PolyManager(Responder &r) : responder(r)
+    {
+        std::fill(lastPBByChannel.begin(), lastPBByChannel.end(), 0);
+    }
 
     size_t polyLimit;
     void setPolyLimit(size_t pl)
@@ -213,7 +216,7 @@ template <typename Cfg, typename Responder> struct PolyManager
         }
     }
 
-    std::array<uint16_t, 16> lastPBByChannel;
+    std::array<uint16_t, 16> lastPBByChannel{};
     void routeMIDIPitchBend(int16_t port, int16_t channel, uint16_t pb14bit)
     {
         lastPBByChannel[channel] = pb14bit - 8192;
