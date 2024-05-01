@@ -40,6 +40,15 @@ void applyMidi1Message(Manager &voiceManager, int16_t port_index, const uint8_t 
             voiceManager.processNoteOnEvent(port_index, chan, data[1], -1,
                                             voiceManager.midiToFloatVelocity(data[2]), 0.f);
         }
+
+        if (data[1] == 120)
+        {
+            voiceManager.allSoundsOff();
+        }
+        if (data[1] == 123)
+        {
+            voiceManager.allNotesOff();
+        }
         break;
     }
     case 0x80:
