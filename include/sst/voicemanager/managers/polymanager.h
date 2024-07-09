@@ -113,7 +113,7 @@ template <typename Cfg, typename Responder> struct PolyManager
             return true;
 
         /*
-        if(voicesLaunched + something > somethingElse)
+        if(voicesToBeLaunched + something > somethingElse)
         {
             TODO: Stealing. Probably want this before the create loop too.
         }
@@ -121,8 +121,9 @@ template <typename Cfg, typename Responder> struct PolyManager
 
         auto voicesLaunched = responder.initializeMultipleVoices(
             voiceInitWorkingBuffer, port, channel, key, noteid, velocity, retune);
-        if (voicesLaunched == voicesToBeLaunched)
+        if (voicesLaunched != voicesToBeLaunched)
         {
+            return false;
         }
 
         auto voicesLeft = voicesLaunched;
