@@ -187,12 +187,8 @@ template <typename Cfg, typename Responder> struct VoiceManager
         return 0;
     }
 
-    void allNotesOff(){
-        responder.allNotesOff();
-    }
-    void allSoundsOff(){
-        responder.allSoundsOff();
-    }
+    void allNotesOff() { responder.allNotesOff(); }
+    void allSoundsOff() { responder.allSoundsOff(); }
 
     static float midiToFloatVelocity(uint8_t vel) { return 1.f * vel / 127.f; }
 
