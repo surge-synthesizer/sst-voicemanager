@@ -1,0 +1,40 @@
+name: Build Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build_feature:
+    name: Test ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+            testExe: build/sst-voicemanager-test
+          - os: macos-latest
+            name: mac
+            testExe: build/sst-voicemanager-test
+          - os: windows-latest
+            name: win
+            testExe: build/Release/sst-voicemanager-test.exe
+
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Build test
+        run: |
+          cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release -DSST_VOICEMANAGER_BUILD_TESTS=TRUE 
+          cmake --build ./build --config Release
+
+      - name: Run test
+        run: |
+          ls ${{ matrix.testExe }}
+          ${{ matrix.testExe }}

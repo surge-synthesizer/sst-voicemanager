@@ -38,10 +38,34 @@ struct ConcreteResp
     {
         return innards.newVoice(port, channel, key, noteId, velocity, retune);
     }
+
+    int32_t initializeMultipleVoices(
+        std::array<typename Config::voice_t *, Config::maxVoiceCount> &voiceInitWorkingBuffer,
+        uint16_t port, uint16_t channel, uint16_t key, int32_t noteId, float velocity, float retune)
+    {
+        auto voice = innards.newVoice(port, channel, key, noteId, velocity, retune);
+        for (auto &v : voiceInitWorkingBuffer)
+        {
+            if (!v)
+            {
+                v = voice;
+                break;
+            }
+        }
+        return 1;
+    }
+
+    void setMIDI1CC(void *v, int32_t cc, int32_t val) {}
+
     void releaseVoice(void *v, float velocity) { innards.release(v, velocity); }
     void retriggerVoiceWithNewNoteID(void *v, int32_t noteid, float velocity) {}
 
     void setVoiceMIDIPitchBend(void *v, uint16_t) {}
+    int voiceCountForInitializationAction(uint16_t port, uint16_t channel, uint16_t key,
+                                          int32_t noteid, float velocity)
+    {
+        return 1;
+    }
 
     // Innards
     struct Innards
