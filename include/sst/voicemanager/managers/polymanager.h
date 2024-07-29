@@ -219,7 +219,9 @@ template <typename Cfg, typename Responder> struct PolyManager
     std::array<uint16_t, 16> lastPBByChannel{};
     void routeMIDIPitchBend(int16_t port, int16_t channel, uint16_t pb14bit)
     {
-        lastPBByChannel[channel] = pb14bit - 8192;
+        if (channel >= 0 && channel < lastPBByChannel.size())
+            lastPBByChannel[channel] = pb14bit - 8192;
+
         for (auto &vi : voiceInfo)
         {
             if (vi.matches(port, channel, -1, -1)) // all keys and notes on a channel for midi PB
