@@ -61,14 +61,15 @@ struct ConcreteResp
     void retriggerVoiceWithNewNoteID(void *v, int32_t noteid, float velocity) {}
 
     void setVoiceMIDIPitchBend(void *v, uint16_t) {}
-    int beginVoiceCreationTransaction(uint16_t port, uint16_t channel, uint16_t key,
-                                          int32_t noteid, float velocity)
+    int beginVoiceCreationTransaction(uint16_t port, uint16_t channel, uint16_t key, int32_t noteid,
+                                      float velocity)
     {
         return 1;
     }
-    void endVoiceCreationTransaction(uint16_t port, uint16_t channel, uint16_t key,
-                                          int32_t noteid, float velocity)
-    {}
+    void endVoiceCreationTransaction(uint16_t port, uint16_t channel, uint16_t key, int32_t noteid,
+                                     float velocity)
+    {
+    }
 
     // Innards
     struct Innards
