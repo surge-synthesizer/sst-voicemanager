@@ -107,10 +107,13 @@ template <typename Cfg, typename Responder> struct PolyManager
         }
 
         auto voicesToBeLaunched =
-            responder.voiceCountForInitializationAction(port, channel, key, noteid, velocity);
+            responder.beginVoiceCreationTransaction(port, channel, key, noteid, velocity);
 
         if (voicesToBeLaunched == 0)
+        {
+            responder.endVoiceCreationTransaction(port, channel, key, noteid, velocity);
             return true;
+        }
 
         /*
         if(voicesToBeLaunched + something > somethingElse)
@@ -158,9 +161,15 @@ template <typename Cfg, typename Responder> struct PolyManager
                 }
                 voicesLeft--;
                 if (voicesLeft == 0)
+                {
+                    responder.endVoiceCreationTransaction(port, channel, key, noteid, velocity);
+
                     return true;
+                }
             }
         }
+
+        responder.endVoiceCreationTransaction(port, channel, key, noteid, velocity);
 
         return false;
     }
