@@ -23,7 +23,7 @@
 
 namespace sst::voicemanager::managers
 {
-template <typename Cfg, typename Responder> struct PolyManager
+template <typename Cfg, typename VoiceResponder, typename MonoResponder> struct PolyManager
 {
     int64_t mostRecentNoteCounter{1};
 
@@ -52,8 +52,9 @@ template <typename Cfg, typename Responder> struct PolyManager
     std::array<VoiceInfo, Cfg::maxVoiceCount> voiceInfo;
     std::array<typename Cfg::voice_t *, Cfg::maxVoiceCount> voiceInitWorkingBuffer;
 
-    Responder &responder;
-    PolyManager(Responder &r) : responder(r)
+    VoiceResponder &responder;
+    MonoResponder &monoResponder;
+    PolyManager(VoiceResponder &r, MonoResponder &m) : responder(r), monoResponder(m)
     {
         std::fill(lastPBByChannel.begin(), lastPBByChannel.end(), 0);
     }
@@ -122,6 +123,21 @@ template <typename Cfg, typename Responder> struct PolyManager
         }
         */
 
+        if (lastPBByChannel[channel] != 0)
+        {
+            monoResponder.setMIDIPitchBend(channel, lastPBByChannel[channel] + 8192);
+        }
+
+        int cid{0};
+        for (auto &mcc : midiCCCache[channel])
+        {
+            if (mcc != 0)
+            {
+                monoResponder.setMIDI1CC(channel, cid, mcc);
+            }
+            cid++;
+        }
+
         auto voicesLaunched = responder.initializeMultipleVoices(
             voiceInitWorkingBuffer, port, channel, key, noteid, velocity, retune);
         if (voicesLaunched != voicesToBeLaunched)
@@ -144,21 +160,6 @@ template <typename Cfg, typename Responder> struct PolyManager
                 vi.gatedDueToSustain = false;
                 vi.activeVoiceCookie = voiceInitWorkingBuffer[voicesLeft - 1];
 
-                if (lastPBByChannel[channel] != 0)
-                {
-                    responder.setVoiceMIDIPitchBend(vi.activeVoiceCookie,
-                                                    lastPBByChannel[channel] + 8192);
-                }
-
-                int cid{0};
-                for (auto &mcc : midiCCCache[channel])
-                {
-                    if (mcc != 0)
-                    {
-                        responder.setMIDI1CC(vi.activeVoiceCookie, cid, mcc);
-                    }
-                    cid++;
-                }
                 voicesLeft--;
                 if (voicesLeft == 0)
                 {
@@ -226,19 +227,13 @@ template <typename Cfg, typename Responder> struct PolyManager
         }
     }
 
-    std::array<uint16_t, 16> lastPBByChannel{};
-    void routeMIDIPitchBend(int16_t port, int16_t channel, uint16_t pb14bit)
+    std::array<int16_t, 16> lastPBByChannel{};
+    void routeMIDIPitchBend(int16_t port, int16_t channel, int16_t pb14bit)
     {
         if (channel >= 0 && channel < lastPBByChannel.size())
             lastPBByChannel[channel] = pb14bit - 8192;
 
-        for (auto &vi : voiceInfo)
-        {
-            if (vi.matches(port, channel, -1, -1)) // all keys and notes on a channel for midi PB
-            {
-                responder.setVoiceMIDIPitchBend(vi.activeVoiceCookie, pb14bit);
-            }
-        }
+        monoResponder.setMIDIPitchBend(channel, pb14bit);
     }
 
     void routeMIDIMPEChannelPitchBend(int16_t port, int16_t channel, uint16_t pb14bit)
@@ -309,14 +304,9 @@ template <typename Cfg, typename Responder> struct PolyManager
     void routeMIDI1CC(int16_t port, int16_t channel, int8_t cc, int8_t val)
     {
         midiCCCache[channel][cc] = val;
-        for (auto &vi : voiceInfo)
-        {
-            if (vi.matches(port, channel, -1, -1)) // all keys and notes on a channel for midi PB
-            {
-                responder.setMIDI1CC(vi.activeVoiceCookie, cc, val);
-            }
-        }
+        monoResponder.setMIDI1CC(channel, cc, val);
     }
+
     void routePolyphonicAftertouch(int16_t port, int16_t channel, int16_t key, int8_t pat)
     {
         for (auto &vi : voiceInfo)
@@ -330,13 +320,7 @@ template <typename Cfg, typename Responder> struct PolyManager
 
     void routeChannelPressure(int16_t port, int16_t channel, int8_t pat)
     {
-        for (auto &vi : voiceInfo)
-        {
-            if (vi.matches(port, channel, -1, -1)) // all keys and notes on a channel for midi PB
-            {
-                responder.setChannelPressure(vi.activeVoiceCookie, pat);
-            }
-        }
+        monoResponder.setMIDIChannelPressure(channel, pat);
     }
 };
 } // namespace sst::voicemanager::managers
