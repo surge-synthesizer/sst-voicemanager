@@ -55,12 +55,9 @@ struct ConcreteResp
         return 1;
     }
 
-    void setMIDI1CC(void *v, int32_t cc, int32_t val) {}
-
     void releaseVoice(void *v, float velocity) { innards.release(v, velocity); }
     void retriggerVoiceWithNewNoteID(void *v, int32_t noteid, float velocity) {}
 
-    void setVoiceMIDIPitchBend(void *v, uint16_t) {}
     int beginVoiceCreationTransaction(uint16_t port, uint16_t channel, uint16_t key, int32_t noteid,
                                       float velocity)
     {
@@ -126,16 +123,24 @@ struct ConcreteResp
     } innards;
 };
 
-using voicemanager_t = sst::voicemanager::VoiceManager<Config, ConcreteResp>;
+struct ConcreteMonoResp
+{
+    void setMIDIPitchBend(int16_t channel, int16_t pb14bit) {}
+    void setMIDI1CC(int16_t channel, int16_t cc, int16_t val) {}
+    void setMIDIChannelPressure(int16_t channel, int16_t pres) {}
+};
+
+using voicemanager_t = sst::voicemanager::VoiceManager<Config, ConcreteResp, ConcreteMonoResp>;
 
 TEST_CASE("Basic Poly Note On Note Off")
 {
     ConcreteResp concreteResp;
+    ConcreteMonoResp concreteMonoResp;
 
     SECTION("OnOff")
     {
         // voice manager: consumes config
-        voicemanager_t vm(concreteResp);
+        voicemanager_t vm(concreteResp, concreteMonoResp);
 
         // Send a midi message note on, see voice and gated voice tick up
         uint16_t port{0}, channel{0}, key{60}, velocity{90};

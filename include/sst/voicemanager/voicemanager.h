@@ -23,7 +23,7 @@
 
 namespace sst::voicemanager
 {
-template <typename Cfg, typename Responder> struct VoiceManager
+template <typename Cfg, typename Responder, typename MonoResponder> struct VoiceManager
 {
     enum VoiceMode
     {
@@ -39,7 +39,8 @@ template <typename Cfg, typename Responder> struct VoiceManager
     int8_t mpeGlobalChannel{0};
 
     Responder &responder;
-    VoiceManager(Responder &r) : responder(r), polyManager(r)
+    MonoResponder &monoResponder;
+    VoiceManager(Responder &r, MonoResponder &m) : responder(r), monoResponder(m), polyManager(r, m)
     {
         polyManager.registerVoiceEndCallback();
     }
@@ -192,7 +193,7 @@ template <typename Cfg, typename Responder> struct VoiceManager
 
     static float midiToFloatVelocity(uint8_t vel) { return 1.f * vel / 127.f; }
 
-    using polymanager_t = sst::voicemanager::managers::PolyManager<Cfg, Responder>;
+    using polymanager_t = sst::voicemanager::managers::PolyManager<Cfg, Responder, MonoResponder>;
     polymanager_t polyManager;
 };
 } // namespace sst::voicemanager
