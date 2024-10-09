@@ -55,6 +55,7 @@ struct ConcreteResp
         return 1;
     }
 
+    void terminateVoice(void *v) {}
     void releaseVoice(void *v, float velocity) { innards.release(v, velocity); }
     void retriggerVoiceWithNewNoteID(void *v, int32_t noteid, float velocity) {}
 

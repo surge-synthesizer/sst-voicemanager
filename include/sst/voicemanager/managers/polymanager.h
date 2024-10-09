@@ -50,6 +50,8 @@ template <typename Cfg, typename VoiceResponder, typename MonoResponder> struct 
         }
     };
     std::array<VoiceInfo, Cfg::maxVoiceCount> voiceInfo;
+    uint32_t usedVoices{0};
+
     std::array<typename Cfg::voice_t *, Cfg::maxVoiceCount> voiceInitWorkingBuffer;
 
     VoiceResponder &responder;
@@ -116,12 +118,55 @@ template <typename Cfg, typename VoiceResponder, typename MonoResponder> struct 
             return true;
         }
 
-        /*
-        if(voicesToBeLaunched + something > somethingElse)
+        auto voiceLimit{Cfg::maxVoiceCount};
+        if (voicesToBeLaunched + usedVoices > voiceLimit)
         {
-            TODO: Stealing. Probably want this before the create loop too.
+            if (voicesToBeLaunched > (int32_t)Cfg::maxVoiceCount)
+            {
+                // We can't steal enough. So just bail on this edge case for now
+                responder.endVoiceCreationTransaction(port, channel, key, noteid, velocity);
+                return false;
+            }
+
+            auto usedVoicesCopy{usedVoices};
+            while (voicesToBeLaunched + usedVoicesCopy > voiceLimit)
+            {
+                // We really want strategies here but for now just steal
+                // oldest non-gated and if thats not there oldest gated
+                typename Cfg::voice_t *oldestGated{nullptr}, *oldestNonGated{nullptr};
+                int64_t gi{std::numeric_limits<int64_t>::max()}, ngi{gi};
+                for (const auto &v : voiceInfo)
+                {
+                    if (!v.activeVoiceCookie)
+                        continue;
+                    if (v.gated || v.gatedDueToSustain)
+                    {
+                        if (v.noteCounter < gi)
+                        {
+                            gi = v.noteCounter;
+                            oldestGated = v.activeVoiceCookie;
+                        }
+                    }
+                    else
+                    {
+                        if (v.noteCounter < ngi)
+                        {
+                            ngi = v.noteCounter;
+                            oldestNonGated = v.activeVoiceCookie;
+                        }
+                    }
+                }
+                if (oldestNonGated)
+                {
+                    responder.terminateVoice(oldestNonGated);
+                }
+                else
+                {
+                    responder.terminateVoice(oldestGated);
+                }
+                usedVoicesCopy--;
+            }
         }
-        */
 
         if (lastPBByChannel[channel] != 0)
         {
@@ -140,8 +185,16 @@ template <typename Cfg, typename VoiceResponder, typename MonoResponder> struct 
 
         auto voicesLaunched = responder.initializeMultipleVoices(
             voiceInitWorkingBuffer, port, channel, key, noteid, velocity, retune);
+
         if (voicesLaunched != voicesToBeLaunched)
         {
+            // This is probably OK
+        }
+
+        if (voicesLaunched == 0)
+        {
+            responder.endVoiceCreationTransaction(port, channel, key, noteid, velocity);
+
             return false;
         }
 
@@ -150,7 +203,8 @@ template <typename Cfg, typename VoiceResponder, typename MonoResponder> struct 
         {
             if (!vi.activeVoiceCookie)
             {
-                vi.noteCounter = mostRecentNoteCounter;
+                usedVoices++;
+                vi.noteCounter = mostRecentNoteCounter++;
                 vi.port = port;
                 vi.channel = channel;
                 vi.key = key;
@@ -223,6 +277,7 @@ template <typename Cfg, typename VoiceResponder, typename MonoResponder> struct 
             if (vi.activeVoiceCookie == v)
             {
                 vi.activeVoiceCookie = nullptr;
+                usedVoices--;
             }
         }
     }
