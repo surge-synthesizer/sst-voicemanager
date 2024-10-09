@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <cassert>
 #include <iostream>
+#include <limits>
 
 namespace sst::voicemanager::managers
 {
