@@ -378,6 +378,28 @@ template <typename Cfg, typename VoiceResponder, typename MonoResponder> struct 
     {
         monoResponder.setMIDIChannelPressure(channel, pat);
     }
+
+    void routeMIDIMPETimbreToVoice(int16_t port, int16_t channel, int8_t val)
+    {
+        for (auto &vi : voiceInfo)
+        {
+            if (vi.port == port && vi.channel == channel && vi.gated)
+            {
+                responder.setVoiceMIDIMPETimbre(vi.activeVoiceCookie, val);
+            }
+        }
+    }
+
+    void routeMIDIMPEChannelPressureToVoice(int16_t port, int16_t channel, int8_t val)
+    {
+        for (auto &vi : voiceInfo)
+        {
+            if (vi.port == port && vi.channel == channel && vi.gated)
+            {
+                responder.setVoiceMIDIMPEChannelPressure(vi.activeVoiceCookie, val);
+            }
+        }
+    }
 };
 } // namespace sst::voicemanager::managers
 
