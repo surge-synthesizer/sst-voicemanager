@@ -383,7 +383,7 @@ template <typename Cfg, typename VoiceResponder, typename MonoResponder> struct 
     {
         for (auto &vi : voiceInfo)
         {
-            if (vi.port == port && vi.channel == channel && vi.gated)
+            if (vi.activeVoiceCookie && vi.port == port && vi.channel == channel && vi.gated)
             {
                 responder.setVoiceMIDIMPETimbre(vi.activeVoiceCookie, val);
             }
@@ -394,7 +394,7 @@ template <typename Cfg, typename VoiceResponder, typename MonoResponder> struct 
     {
         for (auto &vi : voiceInfo)
         {
-            if (vi.port == port && vi.channel == channel && vi.gated)
+            if (vi.activeVoiceCookie && vi.port == port && vi.channel == channel && vi.gated)
             {
                 responder.setVoiceMIDIMPEChannelPressure(vi.activeVoiceCookie, val);
             }
