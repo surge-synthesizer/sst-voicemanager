@@ -37,6 +37,7 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
     } dialect{MIDI1};
 
     int8_t mpeGlobalChannel{0};
+    int8_t mpeTimbreCC{74};
 
     Responder &responder;
     MonoResponder &monoResponder;
@@ -124,7 +125,21 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
         switch (voiceMode)
         {
         case POLY:
-            polyManager.routeMIDI1CC(port, channel, cc, val);
+            if (dialect == MIDI1)
+            {
+                polyManager.routeMIDI1CC(port, channel, cc, val);
+            }
+            else if (dialect == MIDI1_MPE)
+            {
+                if (channel == mpeGlobalChannel || cc != mpeTimbreCC)
+                {
+                    polyManager.routeMIDI1CC(port, channel, cc, val);
+                }
+                else
+                {
+                    polyManager.routeMIDIMPETimbreToVoice(port, channel, val);
+                }
+            }
         }
     }
 
@@ -142,7 +157,21 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
         switch (voiceMode)
         {
         case POLY:
-            polyManager.routeChannelPressure(port, channel, pat);
+            if (dialect == MIDI1)
+            {
+                polyManager.routeChannelPressure(port, channel, pat);
+            }
+            else if (dialect == MIDI1_MPE)
+            {
+                if (channel == mpeGlobalChannel)
+                {
+                    polyManager.routeChannelPressure(port, channel, pat);
+                }
+                else
+                {
+                    polyManager.routeMIDIMPEChannelPressureToVoice(port, channel, pat);
+                }
+            }
         }
     }
     void routeNoteExpression(int16_t port, int16_t channel, int16_t key, int32_t noteid,
