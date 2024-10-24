@@ -19,6 +19,7 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <cstddef>
 
 /**
  * \mainpage SST Voice Manager
