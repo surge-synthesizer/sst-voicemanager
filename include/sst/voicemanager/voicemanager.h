@@ -20,6 +20,8 @@
 #include <cassert>
 #include <cstdint>
 #include <cstddef>
+#include <limits>
+#include <algorithm>
 
 /**
  * \mainpage SST Voice Manager
