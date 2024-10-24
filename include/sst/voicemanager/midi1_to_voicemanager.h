@@ -3,7 +3,7 @@
  * voice management in response to midi and clap event streams
  * with support for a variety of play, trigger, and midi nodes
  *
- * Copyright 2023, various authors, as described in the GitHub
+ * Copyright 2023-2024, various authors, as described in the GitHub
  * transaction log.
  *
  * sst-voicemanager is released under the MIT license, available
@@ -20,6 +20,9 @@
 
 namespace sst::voicemanager
 {
+
+static float midiToFloatVelocity(uint8_t vel) { return 1.f * vel / 127.f; }
+
 template <typename Manager>
 void applyMidi1Message(Manager &voiceManager, int16_t port_index, const uint8_t data[3])
 {
@@ -32,30 +35,22 @@ void applyMidi1Message(Manager &voiceManager, int16_t port_index, const uint8_t 
         if (data[2] == 0)
         {
             voiceManager.processNoteOffEvent(port_index, chan, data[1], -1,
-                                             voiceManager.midiToFloatVelocity(data[2]));
+                                             midiToFloatVelocity(data[2]));
         }
         else
         {
             // Hosts should prefer CLAP_NOTE events but if they don't
             voiceManager.processNoteOnEvent(port_index, chan, data[1], -1,
-                                            voiceManager.midiToFloatVelocity(data[2]), 0.f);
+                                            midiToFloatVelocity(data[2]), 0.f);
         }
 
-        if (data[1] == 120)
-        {
-            voiceManager.allSoundsOff();
-        }
-        if (data[1] == 123)
-        {
-            voiceManager.allNotesOff();
-        }
         break;
     }
     case 0x80:
     {
         // Hosts should prefer CLAP_NOTE events but if they don't
         voiceManager.processNoteOffEvent(port_index, chan, data[1], -1,
-                                         voiceManager.midiToFloatVelocity(data[2]));
+                                         midiToFloatVelocity(data[2]));
         break;
     }
     case 0xA0:
@@ -71,6 +66,14 @@ void applyMidi1Message(Manager &voiceManager, int16_t port_index, const uint8_t 
         if (data[1] == 64)
         {
             voiceManager.updateSustainPedal(port_index, chan, data[2]);
+        }
+        else if (data[1] == 120)
+        {
+            voiceManager.allSoundsOff();
+        }
+        else if (data[1] == 123)
+        {
+            voiceManager.allNotesOff();
         }
         else
         {
