@@ -22,7 +22,7 @@ TEST_CASE("MPE Basic")
 {
     auto tp = TestPlayer<32, false>();
     auto &vm = tp.voiceManager;
-    vm.dialect = TestPlayer<32, false>::voiceManager_t::MIDI1_MPE;
+    vm.dialect = TestPlayer<32, false>::voiceManager_t::MIDI1Dialect::MIDI1_MPE;
 
     REQUIRE_NO_VOICES;
 
@@ -64,7 +64,7 @@ TEST_CASE("MPE After Release")
     auto tp = TestPlayer<32, false>();
 
     auto &vm = tp.voiceManager;
-    vm.dialect = TestPlayer<32, false>::voiceManager_t::MIDI1_MPE;
+    vm.dialect = TestPlayer<32, false>::voiceManager_t::MIDI1Dialect::MIDI1_MPE;
 
     REQUIRE_NO_VOICES;
 

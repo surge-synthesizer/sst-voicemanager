@@ -24,7 +24,7 @@ TEST_CASE("Routing Midi CC")
     auto &vm = tp.voiceManager;
 
     REQUIRE_NO_VOICES;
-    REQUIRE(vm.dialect == TestPlayer<32>::voiceManager_t::MIDI1);
+    REQUIRE(vm.dialect == TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1);
 
     // Test one: Does routing midi cc on cc 0 and 6 stay independent
     vm.routeMIDI1CC(0, 0, 0, 17);

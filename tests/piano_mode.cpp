@@ -24,7 +24,7 @@ TEST_CASE("Poly Multi Key Piano Mode")
     {
         auto tp = TestPlayer<32>();
         auto &vm = tp.voiceManager;
-        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::PIANO;
+        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
 
         REQUIRE_NO_VOICES;
 
@@ -43,7 +43,7 @@ TEST_CASE("Poly Multi Key Piano Mode")
     {
         auto tp = TestPlayer<32>();
         auto &vm = tp.voiceManager;
-        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::PIANO;
+        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
 
         REQUIRE_NO_VOICES;
 
@@ -65,7 +65,7 @@ TEST_CASE("Poly Multi Key Non Piano Mode")
     {
         auto tp = TestPlayer<32>();
         auto &vm = tp.voiceManager;
-        REQUIRE(vm.repeatedKeyMode == TestPlayer<32>::voiceManager_t::MULTI_VOICE);
+        REQUIRE(vm.repeatedKeyMode == TestPlayer<32>::voiceManager_t::RepeatedKeyMode::MULTI_VOICE);
 
         REQUIRE_NO_VOICES;
 
@@ -90,7 +90,7 @@ TEST_CASE("Poly Multi Key Non Piano Mode")
     {
         auto tp = TestPlayer<32>();
         auto &vm = tp.voiceManager;
-        REQUIRE(vm.repeatedKeyMode == TestPlayer<32>::voiceManager_t::MULTI_VOICE);
+        REQUIRE(vm.repeatedKeyMode == TestPlayer<32>::voiceManager_t::RepeatedKeyMode::MULTI_VOICE);
 
         REQUIRE_NO_VOICES;
 

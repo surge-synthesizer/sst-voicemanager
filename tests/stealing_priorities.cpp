@@ -65,7 +65,8 @@ TEST_CASE("Stealing Priority - Highest")
         auto &vm = tp.voiceManager;
 
         vm.setPolyphonyGroupVoiceLimit(0, 4);
-        vm.setStealingPriorityMode(0, TestPlayer<32>::voiceManager_t::HIGHEST);
+        vm.setStealingPriorityMode(0,
+                                   TestPlayer<32>::voiceManager_t::StealingPriorityMode::HIGHEST);
         for (int i = 0; i < 4; ++i)
         {
             vm.processNoteOnEvent(0, 0, 60 + i, -1, 0.8, 0.0);
@@ -84,7 +85,8 @@ TEST_CASE("Stealing Priority - Highest")
             auto &vm = tp.voiceManager;
 
             vm.setPolyphonyGroupVoiceLimit(0, lim);
-            vm.setStealingPriorityMode(0, TestPlayer<32>::voiceManager_t::HIGHEST);
+            vm.setStealingPriorityMode(
+                0, TestPlayer<32>::voiceManager_t::StealingPriorityMode::HIGHEST);
 
             for (int i = 0; i < 4; ++i)
             {
@@ -107,7 +109,7 @@ TEST_CASE("Stealing Priority - Lowest")
         auto &vm = tp.voiceManager;
 
         vm.setPolyphonyGroupVoiceLimit(0, 4);
-        vm.setStealingPriorityMode(0, TestPlayer<32>::voiceManager_t::LOWEST);
+        vm.setStealingPriorityMode(0, TestPlayer<32>::voiceManager_t::StealingPriorityMode::LOWEST);
         for (int i = 0; i < 4; ++i)
         {
             vm.processNoteOnEvent(0, 0, 60 - i, -1, 0.8, 0.0);
@@ -126,7 +128,8 @@ TEST_CASE("Stealing Priority - Lowest")
             auto &vm = tp.voiceManager;
 
             vm.setPolyphonyGroupVoiceLimit(0, lim);
-            vm.setStealingPriorityMode(0, TestPlayer<32>::voiceManager_t::LOWEST);
+            vm.setStealingPriorityMode(
+                0, TestPlayer<32>::voiceManager_t::StealingPriorityMode::LOWEST);
 
             for (int i = 0; i < 4; ++i)
             {

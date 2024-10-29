@@ -42,13 +42,30 @@ namespace sst::voicemanager
  */
 template <typename Cfg> struct VoiceInitBufferEntry
 {
-    typename Cfg::voice_t *voice; ///< A pointer to the voice, owned by the responder
+    typename Cfg::voice_t *voice{nullptr}; ///< A pointer to the voice, owned by the responder
 
     /**
      * buffer_t is the typedef for the working group array you will receive
      * in init voices. Use `buffer_t &` rather than the array expansions.
      */
     using buffer_t = std::array<VoiceInitBufferEntry<Cfg>, Cfg::maxVoiceCount>;
+};
+
+/**
+ * VoiceInitInstructionsEntry is how the voice manager gives instructions to the synth
+ * to start or restart a voice.
+ */
+template <typename Cfg> struct VoiceInitInstructionsEntry
+{
+    enum struct Instruction
+    {
+        START,    ///< Start a new voice at this entry
+        SKIP,     ///< Skip this voice altogether. The voice manager has discarded it
+        MOVE_FROM ///< The voice at thius index is a move of the voice pointer
+    } instruction{Instruction::START};
+
+    typename Cfg::voice_t *moveFromVoice{nullptr};
+    using buffer_t = std::array<VoiceInitInstructionsEntry<Cfg>, Cfg::maxVoiceCount>;
 };
 
 /**
@@ -85,30 +102,62 @@ template <typename Cfg> struct VoiceBeginBufferEntry
  */
 template <typename Cfg, typename Responder, typename MonoResponder> struct VoiceManager
 {
-    enum MIDI1Dialect
+    typedef VoiceInitInstructionsEntry<Cfg> initInstruction_t;
+
+    enum struct MIDI1Dialect
     {
         MIDI1,
         MIDI1_MPE
-    } dialect{MIDI1};
+    } dialect{MIDI1Dialect::MIDI1};
 
-    /*
+    /**
      * If a key is struck twice while still gated or sustained, do we start a new voice
-     * or do we re-use the voice (and move the note id)
+     * or do we re-use the voice (and move the note id) or do we trigger a second voice
      */
-    enum RepeatedKeyMode
+    enum struct RepeatedKeyMode
     {
         MULTI_VOICE,
         PIANO
-    } repeatedKeyMode{MULTI_VOICE};
+    } repeatedKeyMode{RepeatedKeyMode::MULTI_VOICE};
 
-    enum PlayMode
+    /**
+     * The voice manager can either run in a mode where it manages to voice limits in a polyphonic
+     * mode (but multi-voice notes still steal together) or can manage to a single note with
+     * essentially unlimited voices. This is controlled by the group PlayMode.
+     */
+    enum struct PlayMode
     {
-        POLY,
-        MONO,
-        MONO_LEGATO
+        POLY_VOICES, ///< The voice manager manages voice counts from any number of keys in piano
+                     ///< mode
+        MONO_NOTES ///< The voice manager makes sure the consequence of only one key is playing at a
+                   ///< time, independent of voices
     };
 
-    enum StealingPriorityMode
+    /**
+     * Mono Playmode is somewhat ambiguous, meaning many things. So lets enumerate the features.
+     * Hope we have fewer than 64. Even though these are using the bits as features they are not all
+     * possible to be active simultaneusly. As well as distinct bit values, we provide a few
+     * preset | combinations of flags for common use cases.
+     */
+    enum struct MonoPlayModeFeatures : uint64_t
+    {
+        NONE = 0,
+        MONO_RETRIGGER = 1 << 0, ///< A new keypress triggers a new voice
+        MONO_LEGATO = 1 << 1,    ///< A new keypress moves the playing voice
+
+        ON_RELEASE_TO_LATEST = 1 << 2,  ///< mono release return to latest
+        ON_RELEASE_TO_HIGHEST = 1 << 3, ///< release to highest
+        ON_RELEASE_TO_LOWEST = 1 << 4,  ///< release to lowest
+
+        NATURAL_MONO = MONO_RETRIGGER | ON_RELEASE_TO_LATEST, ///< What a 'mono' button would do
+        NATURAL_LEGATO = MONO_LEGATO | ON_RELEASE_TO_LATEST,  ///< What a 'legato' button would do
+    };
+
+    /**
+     * StealingPriorityMode deteremines how to pick a voice to steal when an appropriate voice or
+     * note limit is met.  HIGHEST and LOWEST are in midi-key space.
+     */
+    enum struct StealingPriorityMode
     {
         OLDEST,
         HIGHEST,
@@ -150,8 +199,10 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
     void allNotesOff();
     void allSoundsOff();
 
+    void guaranteeGroup(uint64_t groupId);
     void setPolyphonyGroupVoiceLimit(uint64_t groupId, int32_t limit);
-    void setPlaymode(uint64_t groupId, PlayMode pm);
+    void setPlaymode(uint64_t groupId, PlayMode pm,
+                     uint64_t features = (uint64_t)MonoPlayModeFeatures::NONE);
     void setStealingPriorityMode(uint64_t groupId, StealingPriorityMode pm);
 
   private:
