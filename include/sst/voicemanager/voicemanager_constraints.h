@@ -59,7 +59,9 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Const
            void (Responder::*)(uint16_t, uint16_t, uint16_t, int32_t, float))
     HASMEM(terminateVoice, Responder, void (Responder::*)(typename Cfg::voice_t *))
     HASMEM(initializeMultipleVoices, Responder,
-           int32_t (Responder::*)(typename VoiceInitBufferEntry<Cfg>::buffer_t &, uint16_t,
+           int32_t (Responder::*)(int32_t,
+                                  const typename VoiceInitInstructionsEntry<Cfg>::buffer_t &,
+                                  typename VoiceInitBufferEntry<Cfg>::buffer_t &, uint16_t,
                                   uint16_t, uint16_t, int32_t, float, float))
     HASMEM(releaseVoice, Responder, void (Responder::*)(typename Cfg::voice_t *, float))
     HASMEM(setNoteExpression, Responder,
