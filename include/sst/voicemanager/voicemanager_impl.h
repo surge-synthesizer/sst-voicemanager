@@ -32,8 +32,7 @@ static constexpr bool vmLog{false};
     {                                                                                              \
         if constexpr (vmLog)                                                                       \
         {                                                                                          \
-            std::cout << "include/sst/voicemanager/voicemanager_impl.h:" << __LINE__ << " "        \
-                      << __VA_ARGS__ << std::endl;                                                 \
+            std::cout << __FILE__ << ":" << __LINE__ << " " << __VA_ARGS__ << std::endl;           \
         }                                                                                          \
     }
 
@@ -90,10 +89,11 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         float inceptionVelocity{0.f};
         bool heldBySustain{false};
     };
-    using keyState_t = std::array<std::array<std::map<uint64_t, IndividualKeyState>, 128>, 16>;
-    std::map<int32_t, keyState_t> keyStateByPort{};
+    using keyState_t =
+        std::array<std::array<std::unordered_map<uint64_t, IndividualKeyState>, 128>, 16>;
+    std::unordered_map<int32_t, keyState_t> keyStateByPort{};
 
-    void guaranteeGroup(int groupId)
+    void guaranteeGroup(uint64_t groupId)
     {
         if (polyLimits.find(groupId) == polyLimits.end())
             polyLimits[groupId] = Cfg::maxVoiceCount;
@@ -527,8 +527,10 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         }
     }
 
+    VML("- About to call beginVoiceCreationTransaction");
     auto voicesToBeLaunched = responder.beginVoiceCreationTransaction(
         details.voiceBeginWorkingBuffer, port, channel, key, noteid, velocity);
+    VML("- Post begin transaction: voicesToBeLaunched=" << voicesToBeLaunched << " voices");
 
     if (voicesToBeLaunched == 0)
     {
@@ -558,12 +560,13 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
     {
         const auto &vbb = details.voiceBeginWorkingBuffer[i];
         auto polyGroup = vbb.polyphonyGroup;
-        assert(details.polyLimits.find(polyGroup) != details.polyLimits.end());
         assert(details.playMode.find(polyGroup) != details.playMode.end());
 
         auto pm = details.playMode.at(polyGroup);
         if (pm == PlayMode::MONO_NOTES)
             continue;
+
+        assert(details.polyLimits.find(polyGroup) != details.polyLimits.end());
 
         VML("Poly Stealing:");
         VML("- Voice " << i << " group=" << polyGroup << " mode=" << (int)pm);
@@ -692,6 +695,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                                              << " at pckn=" << port << "/" << channel << "/" << key
                                              << "/" << noteid << " pg=" << vi.polyGroup);
 
+            assert(details.usedVoices.find(vi.polyGroup) != details.usedVoices.end());
             ++details.usedVoices.at(vi.polyGroup);
             ++details.totalUsedVoices;
 
@@ -750,17 +754,19 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                 {
                     if (vi.gated)
                     {
-                        VML("- Terminating voice at " << vi.polyGroup << " "
-                                                      << vi.activeVoiceCookie);
                         bool anyOtherOption =
                             details.anyKeyHeldFor(port, vi.polyGroup, channel, key);
                         if (anyOtherOption)
                         {
+                            VML("- Hard Terminate voice with other away " << vi.polyGroup << " "
+                                                                          << vi.activeVoiceCookie);
                             responder.terminateVoice(vi.activeVoiceCookie);
                             retriggerGroups.insert(vi.polyGroup);
                         }
                         else
                         {
+                            VML("- Release voice with other away " << vi.polyGroup << " "
+                                                                   << vi.activeVoiceCookie);
                             responder.releaseVoice(vi.activeVoiceCookie, velocity);
                         }
                         vi.gated = false;

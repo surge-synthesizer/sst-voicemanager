@@ -17,6 +17,7 @@
 
 #include "sst/voicemanager/voicemanager.h"
 #include "test_player.h"
+#include <limits>
 
 TEST_CASE("Stealing Groups - global group")
 {
@@ -139,10 +140,13 @@ TEST_CASE("Stealing Groups are Independentt")
 {
     SECTION("Single Voice")
     {
+        // Make sure we preserve the uint64_t
+        auto hgid = std::numeric_limits<uint64_t>::max() - 72431;
+
         TestPlayer<32> tp;
         auto &vm = tp.voiceManager;
-        tp.polyGroupForKey = [](auto k) { return (k % 2 == 0 ? 643 : 887); };
-        vm.setPolyphonyGroupVoiceLimit(643, 8);
+        tp.polyGroupForKey = [hgid](auto k) { return (k % 2 == 0 ? hgid : 887); };
+        vm.setPolyphonyGroupVoiceLimit(hgid, 8);
         vm.setPolyphonyGroupVoiceLimit(887, 4);
 
         auto oddKey = [](auto &v) { return v.key() % 2 == 1; };
@@ -162,10 +166,12 @@ TEST_CASE("Stealing Groups are Independentt")
     {
         DYNAMIC_SECTION("Double Voice " << off)
         {
+            auto hgid = std::numeric_limits<uint64_t>::max() - 172431;
+
             TestPlayer<64> tp;
             auto &vm = tp.voiceManager;
-            tp.polyGroupForKey = [](auto k) { return (k % 2 == 0 ? 643 : 887); };
-            vm.setPolyphonyGroupVoiceLimit(643, 12 + off);
+            tp.polyGroupForKey = [hgid](auto k) { return (k % 2 == 0 ? hgid : 887); };
+            vm.setPolyphonyGroupVoiceLimit(hgid, 12 + off);
             vm.setPolyphonyGroupVoiceLimit(887, 9 + off);
 
             auto oddKey = [](auto &v) { return v.key() % 2 == 1; };
