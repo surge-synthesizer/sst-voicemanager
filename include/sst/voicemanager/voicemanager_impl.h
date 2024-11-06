@@ -26,7 +26,6 @@
 
 namespace sst::voicemanager
 {
-
 static constexpr bool vmLog{false};
 #define VML(...)                                                                                   \
     {                                                                                              \
@@ -558,6 +557,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
 
     for (int i = 0; i < voicesToBeLaunched; ++i)
     {
+        details.voiceInitInstructionsBuffer[i] = {};
         const auto &vbb = details.voiceBeginWorkingBuffer[i];
         auto polyGroup = vbb.polyphonyGroup;
         assert(details.playMode.find(polyGroup) != details.playMode.end());
@@ -691,9 +691,10 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
             details.keyStateByPort[vi.port][vi.channel][vi.key][vi.polyGroup] = {vi.transactionId,
                                                                                  velocity};
 
-            VML("- New Voice assigned with " << details.mostRecentVoiceCounter
-                                             << " at pckn=" << port << "/" << channel << "/" << key
-                                             << "/" << noteid << " pg=" << vi.polyGroup);
+            VML("- New Voice assigned from "
+                << voicesLeft - 1 << " with " << details.mostRecentVoiceCounter
+                << " at pckn=" << port << "/" << channel << "/" << key << "/" << noteid
+                << " pg=" << vi.polyGroup << " avc=" << vi.activeVoiceCookie);
 
             assert(details.usedVoices.find(vi.polyGroup) != details.usedVoices.end());
             ++details.usedVoices.at(vi.polyGroup);
