@@ -367,50 +367,126 @@ TEST_CASE("Mono Mode - Sustain Pedal")
 
 TEST_CASE("Mono Mode - Two Layers, One Poly")
 {
-    auto tp = TestPlayer<32, true>();
-    typedef TestPlayer<32, true>::voiceManager_t vm_t;
-    auto &vm = tp.voiceManager;
-
-    INFO("Put EVEN and ODD keys in different groups, even poly odd mono");
-    tp.polyGroupForKey = [](auto k) { return (k % 2 == 0 ? 19884 : 8675309); };
-    vm.setPlaymode(19884, vm_t::PlayMode::POLY_VOICES);
-    vm.setPlaymode(8675309, vm_t::PlayMode::MONO_NOTES,
-                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO);
-
-    INFO("Play three poly voices");
-    for (int k = 60; k < 65; k += 2)
+    SECTION("Case one")
     {
-        vm.processNoteOnEvent(0, 0, k, -1, 0.8, 0.0);
+        auto tp = TestPlayer<32, true>();
+        typedef TestPlayer<32, true>::voiceManager_t vm_t;
+        auto &vm = tp.voiceManager;
+
+        INFO("Put EVEN and ODD keys in different groups, even poly odd mono");
+        tp.polyGroupForKey = [](auto k) { return (k % 2 == 0 ? 19884 : 8675309); };
+        vm.setPlaymode(19884, vm_t::PlayMode::POLY_VOICES);
+        vm.setPlaymode(8675309, vm_t::PlayMode::MONO_NOTES,
+                       (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO);
+
+        INFO("Play three poly voices");
+        for (int k = 60; k < 65; k += 2)
+        {
+            vm.processNoteOnEvent(0, 0, k, -1, 0.8, 0.0);
+        }
+        REQUIRE_VOICE_COUNTS(3, 3);
+
+        INFO("Play note 61 for an extra voice");
+        vm.processNoteOnEvent(0, 0, 61, -1, 0.8, 0.0);
+        tp.processFor(1);
+        REQUIRE_VOICE_COUNTS(4, 4);
+        REQUIRE_VOICE_MATCH(1, v.key() == 61);
+
+        INFO("Mono move that to 63");
+        vm.processNoteOnEvent(0, 0, 63, -1, 0.8, 0.0);
+        tp.processFor(1);
+        REQUIRE_VOICE_COUNTS(4, 4);
+        REQUIRE_VOICE_MATCH(1, v.key() == 63);
+
+        INFO("Release a poly voice");
+        vm.processNoteOffEvent(0, 0, 62, -1, 0.8);
+        tp.processFor(1);
+        REQUIRE_VOICE_COUNTS(4, 3); // remember that poly voice is in release mode
+
+        INFO("Release the 63 to go back to 61");
+        vm.processNoteOffEvent(0, 0, 63, -1, 0.8);
+        tp.processFor(1);
+        REQUIRE_VOICE_COUNTS(4, 3); // remember that poly voice is in release mode
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(3, 3); // and that poly voice is no longer released
+
+        INFO("Release the 61 and you get a release mono voice");
+        vm.processNoteOffEvent(0, 0, 61, -1, 0.8);
+        tp.processFor(1);
+        REQUIRE_VOICE_COUNTS(3, 2);
+        REQUIRE_VOICE_MATCH(1, v.key() == 61);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        REQUIRE_VOICE_MATCH(0, v.key() == 61);
     }
-    REQUIRE_VOICE_COUNTS(3, 3);
 
-    INFO("Play note 61 for an extra voice");
-    vm.processNoteOnEvent(0, 0, 61, -1, 0.8, 0.0);
-    REQUIRE_VOICE_COUNTS(4, 4);
-    REQUIRE_VOICE_MATCH(1, v.key() == 61);
+    SECTION("Retrigger during release - base case")
+    {
+        auto tp = TwoGroupsEveryKey<32, true>();
+        typedef TwoGroupsEveryKey<32, true>::voiceManager_t vm_t;
+        auto &vm = tp.voiceManager;
 
-    INFO("Mono move that to 63");
-    vm.processNoteOnEvent(0, 0, 63, -1, 0.8, 0.0);
-    REQUIRE_VOICE_COUNTS(4, 4);
-    REQUIRE_VOICE_MATCH(1, v.key() == 63);
+        vm.setPlaymode(2112, vm_t::PlayMode::POLY_VOICES);
+        vm.setPlaymode(90125, vm_t::PlayMode::MONO_NOTES,
+                       (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO);
 
-    INFO("Release a poly voice");
-    vm.processNoteOffEvent(0, 0, 62, -1, 0.8);
-    REQUIRE_VOICE_COUNTS(4, 3); // remember that poly voice is in release mode
+        INFO("Play three poly voices overlapped with one mono");
+        for (int k = 60; k < 65; k += 2)
+        {
+            vm.processNoteOnEvent(0, 0, k, -1, 0.8, 0.0);
+        }
+        REQUIRE_VOICE_COUNTS(4, 4);
 
-    INFO("Release the 63 to go back to 61");
-    vm.processNoteOffEvent(0, 0, 63, -1, 0.8);
-    REQUIRE_VOICE_COUNTS(4, 3); // remember that poly voice is in release mode
-    tp.processFor(10);
-    REQUIRE_VOICE_COUNTS(3, 3); // and that poly voice is no longer released
+        tp.processFor(2);
+        INFO("Now release everything");
+        for (int k = 60; k < 65; k += 2)
+        {
+            vm.processNoteOffEvent(0, 0, k, -1, 0.8);
+        }
+        REQUIRE_VOICE_COUNTS(4, 0);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(0, 0);
+    }
 
-    INFO("Release the 61 and you get a release mono voice");
-    vm.processNoteOffEvent(0, 0, 61, -1, 0.8);
-    REQUIRE_VOICE_COUNTS(3, 2);
-    REQUIRE_VOICE_MATCH(1, v.key() == 61);
-    tp.processFor(10);
-    REQUIRE_VOICE_COUNTS(2, 2);
-    REQUIRE_VOICE_MATCH(0, v.key() == 61);
+    SECTION("Retrigger in Release - Test Case")
+    {
+        auto tp = TwoGroupsEveryKey<32, true>();
+        typedef TwoGroupsEveryKey<32, true>::voiceManager_t vm_t;
+        auto &vm = tp.voiceManager;
+        vm.setPlaymode(2112, vm_t::PlayMode::POLY_VOICES);
+        vm.setPlaymode(90125, vm_t::PlayMode::MONO_NOTES,
+                       (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO);
+
+        INFO("Now do it again but retrigger during release");
+        for (int k = 60; k < 65; k += 2)
+        {
+            vm.processNoteOnEvent(0, 0, k, -1, 0.8, 0.0);
+        }
+        REQUIRE_VOICE_COUNTS(4, 4);
+
+        tp.processFor(2);
+        INFO("Now release everything");
+        for (int k = 60; k < 65; k += 2)
+        {
+            vm.processNoteOffEvent(0, 0, k, -1, 0.8);
+        }
+        REQUIRE_VOICE_COUNTS(4, 0);
+        tp.processFor(1);
+        REQUIRE_VOICE_COUNTS(4, 0);
+
+        INFO("Now retrigger two notes - the ringing mono moves and we add a poly");
+        vm.processNoteOnEvent(0, 0, 55, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(5, 2);
+        tp.processFor(1);
+
+        vm.processNoteOnEvent(0, 0, 54, -1, 0.8, 0.0);
+        INFO("This should add 2 poly gated voices and one mono since we are in piano mode");
+        REQUIRE_VOICE_COUNTS(6, 3);
+
+        INFO("Let the ungated ring out");
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(3, 3);
+    }
 }
 
 TEST_CASE("Mono terminates a non-gated release voice")
@@ -496,4 +572,35 @@ TEST_CASE("Mono Mode - Poly and Mono on same key with multi-voice start")
     REQUIRE_VOICE_COUNTS(3, 2);
     REQUIRE_VOICE_MATCH(2, v.key() == 60);
     REQUIRE_VOICE_MATCH(1, v.key() == 62);
+}
+
+TEST_CASE("Mono Mode - Layerd Retrigger Miss")
+{
+    auto tp = TwoGroupsEveryKey<32, true>();
+    typedef TwoGroupsEveryKey<32, true>::voiceManager_t vm_t;
+    auto &vm = tp.voiceManager;
+
+    vm.setPlaymode(2112, vm_t::PlayMode::MONO_NOTES,
+                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO);
+
+    vm.processNoteOnEvent(0, 0, 58, -1, 0.8, 0);
+    tp.processFor(1);
+    REQUIRE_KEY_COUNT(2, 58);
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    tp.processFor(1);
+    REQUIRE_KEY_COUNT(1, 58);
+    REQUIRE_KEY_COUNT(2, 60);
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.8);
+    tp.processFor(1);
+    REQUIRE_KEY_COUNT(2, 58);
+    REQUIRE_KEY_COUNT(1, 60);
+    // Ring out the poly release
+    tp.processFor(10);
+    REQUIRE_KEY_COUNT(2, 58);
+    REQUIRE_KEY_COUNT(0, 60);
+
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    tp.processFor(1);
+    REQUIRE_KEY_COUNT(1, 58);
+    REQUIRE_KEY_COUNT(2, 60);
 }

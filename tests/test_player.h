@@ -506,6 +506,8 @@ struct TwoGroupsEveryKey : TestPlayer<voiceCount, doLog>
     REQUIRE(tp.activeVoicesMatching([](auto &v) { return __VA_ARGS__; }) == ct)
 
 #define REQUIRE_VOICE_MATCH_FN(ct, ...) REQUIRE(tp.activeVoicesMatching(__VA_ARGS__) == ct)
+#define REQUIRE_KEY_COUNT(ct, keyNumber)                                                           \
+    REQUIRE(tp.activeVoicesMatching([](const auto &v) { return v.key() == keyNumber; }) == ct)
 
 // #define REQUIRE_INCOMPLETE_TEST REQUIRE(false)
 #define REQUIRE_INCOMPLETE_TEST INFO("This test is currently incomplete");
