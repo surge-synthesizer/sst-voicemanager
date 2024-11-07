@@ -369,8 +369,8 @@ TEST_CASE("Mono Mode - Two Layers, One Poly")
 {
     SECTION("Case one")
     {
-        auto tp = TestPlayer<32, true>();
-        typedef TestPlayer<32, true>::voiceManager_t vm_t;
+        auto tp = TestPlayer<32>();
+        typedef TestPlayer<32>::voiceManager_t vm_t;
         auto &vm = tp.voiceManager;
 
         INFO("Put EVEN and ODD keys in different groups, even poly odd mono");
@@ -422,8 +422,8 @@ TEST_CASE("Mono Mode - Two Layers, One Poly")
 
     SECTION("Retrigger during release - base case")
     {
-        auto tp = TwoGroupsEveryKey<32, true>();
-        typedef TwoGroupsEveryKey<32, true>::voiceManager_t vm_t;
+        auto tp = TwoGroupsEveryKey<32>();
+        typedef TwoGroupsEveryKey<32>::voiceManager_t vm_t;
         auto &vm = tp.voiceManager;
 
         vm.setPlaymode(2112, vm_t::PlayMode::POLY_VOICES);
@@ -450,8 +450,8 @@ TEST_CASE("Mono Mode - Two Layers, One Poly")
 
     SECTION("Retrigger in Release - Test Case")
     {
-        auto tp = TwoGroupsEveryKey<32, true>();
-        typedef TwoGroupsEveryKey<32, true>::voiceManager_t vm_t;
+        auto tp = TwoGroupsEveryKey<32>();
+        typedef TwoGroupsEveryKey<32>::voiceManager_t vm_t;
         auto &vm = tp.voiceManager;
         vm.setPlaymode(2112, vm_t::PlayMode::POLY_VOICES);
         vm.setPlaymode(90125, vm_t::PlayMode::MONO_NOTES,
@@ -549,8 +549,8 @@ TEST_CASE("Mono Mode - Poly and Mono on same key with multi-voice start")
 {
     // A special player which for every key makes 2 voices, one in
     // group 2112, one in group 90125
-    auto tp = TwoGroupsEveryKey<32, true>();
-    typedef TwoGroupsEveryKey<32, true>::voiceManager_t vm_t;
+    auto tp = TwoGroupsEveryKey<32>();
+    typedef TwoGroupsEveryKey<32>::voiceManager_t vm_t;
     auto &vm = tp.voiceManager;
 
     vm.setPlaymode(2112, vm_t::PlayMode::MONO_NOTES,
@@ -576,8 +576,8 @@ TEST_CASE("Mono Mode - Poly and Mono on same key with multi-voice start")
 
 TEST_CASE("Mono Mode - Layerd Retrigger Miss")
 {
-    auto tp = TwoGroupsEveryKey<32, true>();
-    typedef TwoGroupsEveryKey<32, true>::voiceManager_t vm_t;
+    auto tp = TwoGroupsEveryKey<32>();
+    typedef TwoGroupsEveryKey<32>::voiceManager_t vm_t;
     auto &vm = tp.voiceManager;
 
     vm.setPlaymode(2112, vm_t::PlayMode::MONO_NOTES,
