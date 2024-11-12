@@ -55,6 +55,8 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         int16_t port{0}, channel{0}, key{0};
         int32_t noteId{-1};
 
+        int16_t originalPort{0}, originalChannel{0}, originalKey{0};
+
         int64_t voiceCounter{0}, transactionId{0};
 
         bool gated{false};
@@ -72,6 +74,13 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             res = res && (k == -1 || key == -1 || k == key);
             res = res && (nid == -1 || noteId == -1 || nid == noteId);
             return res;
+        }
+
+        void snapOriginalToCurrent()
+        {
+            originalPort = port;
+            originalChannel = channel;
+            originalKey = key;
         }
     };
     std::array<VoiceInfo, Cfg::maxVoiceCount> voiceInfo;
@@ -278,7 +287,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
 
     void doMonoRetrigger(int16_t port, uint64_t polyGroup)
     {
-        VML("=== MONO mode voice retrigger for " << polyGroup);
+        VML("=== MONO mode voice retrigger or move for " << polyGroup);
         auto &ks = keyStateByPort[port];
         auto ft = playModeFeatures.at(polyGroup);
         int dch{-1}, dk{-1};
@@ -286,7 +295,6 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
 
         auto findBestKey = [&](bool ignoreSustain)
         {
-            VML("- find best key " << ignoreSustain);
             if (ft & (uint64_t)MonoPlayModeFeatures::ON_RELEASE_TO_LATEST)
             {
                 int64_t mtx = 0;
@@ -368,7 +376,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         if (dch < 0)
             findBestKey(true);
 
-        if (dch >= 0 && dk >= 0)
+        if (ft & (uint64_t)MonoPlayModeFeatures::MONO_RETRIGGER && dch >= 0 && dk >= 0)
         {
             // Need to know the velocity and the port
             VML("- retrigger Note " << dch << " " << dk << " " << dvel);
@@ -406,6 +414,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
                     vi.channel = dch;
                     vi.key = dk;
                     vi.noteId = dnid;
+                    vi.snapOriginalToCurrent();
 
                     vi.gated = true;
                     vi.gatedDueToSustain = false;
@@ -434,6 +443,31 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             }
 
             vm.responder.endVoiceCreationTransaction(port, dch, dk, dnid, dvel);
+        }
+
+        else if (ft & (uint64_t)MonoPlayModeFeatures::MONO_LEGATO && dch >= 0 && dk >= 0)
+        {
+            VML("- Move notes in group " << polyGroup << " to " << dch << "/" << dk);
+            for (auto &v : voiceInfo)
+            {
+                if (v.activeVoiceCookie && v.polyGroup == polyGroup)
+                {
+                    if (v.gated || v.gatedDueToSustain)
+                    {
+                        VML("- Move gated voice");
+                        vm.responder.moveVoice(v.activeVoiceCookie, port, dch, dk, dvel);
+                    }
+                    else
+                    {
+                        VML("- Move and retrigger non gated voice");
+                        vm.responder.moveAndRetriggerVoice(v.activeVoiceCookie, port, dch, dk,
+                                                           dvel);
+                    }
+                    v.port = port;
+                    v.channel = dch;
+                    v.key = dk;
+                }
+            }
         }
     }
 
@@ -625,13 +659,57 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         VML("Mono Stealing:");
     for (const auto &mpg : monoGroups)
     {
-        VML("- Would steal all voices in " << mpg << " (TODO: This is *WRONG* for Legato)");
-        for (const auto &v : details.voiceInfo)
+        VML("- Would steal all voices in " << mpg);
+        auto isLegato =
+            details.playModeFeatures.at(mpg) & (uint64_t)MonoPlayModeFeatures::MONO_LEGATO;
+        VML("- IsLegato : " << isLegato);
+        if (isLegato)
         {
-            if (v.activeVoiceCookie && v.polyGroup == mpg)
+            bool foundOne{false};
+            for (auto &v : details.voiceInfo)
             {
-                VML("- Stealing voice " << v.key);
-                responder.terminateVoice(v.activeVoiceCookie);
+                if (v.activeVoiceCookie && v.polyGroup == mpg)
+                {
+                    VML("  - Moving existing voice " << v.activeVoiceCookie << " to " << key);
+                    if (v.gated)
+                    {
+                        responder.moveVoice(v.activeVoiceCookie, port, channel, key, velocity);
+                    }
+                    else
+                    {
+                        responder.moveAndRetriggerVoice(v.activeVoiceCookie, port, channel, key,
+                                                        velocity);
+                    }
+                    v.port = port;
+                    v.channel = channel;
+                    v.key = key;
+                    v.gated = true;
+
+                    foundOne = true;
+                }
+            }
+            if (foundOne)
+            {
+                for (int i = 0; i < voicesToBeLaunched; ++i)
+                {
+                    if (details.voiceBeginWorkingBuffer[i].polyphonyGroup == mpg)
+                    {
+                        VML("  - Setting instruction " << i << " to skip");
+                        details.voiceInitInstructionsBuffer[i].instruction =
+                            VoiceInitInstructionsEntry<Cfg>::Instruction::SKIP;
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (const auto &v : details.voiceInfo)
+            {
+                if (v.activeVoiceCookie && v.polyGroup == mpg)
+                {
+                    VML("- Stealing voice " << v.key);
+                    responder.terminateVoice(v.activeVoiceCookie);
+                }
             }
         }
     }
@@ -682,6 +760,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
             vi.channel = channel;
             vi.key = key;
             vi.noteId = noteid;
+            vi.snapOriginalToCurrent();
 
             vi.gated = true;
             vi.gatedDueToSustain = false;
@@ -732,6 +811,17 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
             VML("- Found matching release note at " << vi.polyGroup << " " << vi.key);
             if (details.playMode[vi.polyGroup] == PlayMode::MONO_NOTES)
             {
+                if (details.playModeFeatures[vi.polyGroup] &
+                    (uint64_t)MonoPlayModeFeatures::MONO_LEGATO)
+                {
+                    bool anyOtherOption = details.anyKeyHeldFor(port, vi.polyGroup, channel, key);
+                    if (anyOtherOption)
+                    {
+                        retriggerGroups.insert(vi.polyGroup);
+                        VML("- A key is down in same group. Initiating mono legato move");
+                        continue;
+                    }
+                }
                 if (details.sustainOn)
                 {
                     VML("- Release with sustain on. Checking to see if there are gated voices "
@@ -776,6 +866,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
             }
             else
             {
+                // Poly branch ere
                 if (details.sustainOn)
                 {
                     vi.gatedDueToSustain = true;
