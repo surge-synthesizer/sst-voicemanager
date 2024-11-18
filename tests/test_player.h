@@ -49,6 +49,8 @@
 template <size_t voiceCount, bool doLog = false> struct TestPlayer
 {
     using pckn_t = std::tuple<int16_t, int16_t, int16_t, int32_t>;
+    int32_t lastCreationCount{1};
+
     struct Voice
     {
         enum State
@@ -57,12 +59,14 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
             ACTIVE
         } state{UNUSED};
         int32_t runtime{0};
+        int32_t creationCount{1};
         bool isGated{false};
         int32_t releaseCountdown{0};
 
         float velocity, releaseVelocity;
 
         pckn_t pckn{-1, -1, -1, -1};
+        pckn_t original_pckn{-1, -1, -1, -1};
 
         int8_t polyATValue{0};
 
@@ -70,6 +74,8 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         auto channel() const { return std::get<1>(pckn); }
         auto key() const { return std::get<2>(pckn); }
         auto noteid() const { return std::get<3>(pckn); }
+
+        auto originalKey() const { return std::get<2>(original_pckn); }
 
         // Note these make the voices non-fixed size so in a real synth you wouldn't want this
         std::map<int32_t, double> noteExpressionCache;
@@ -110,6 +116,24 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         {
             return testPlayer.initFn(voices, voiceInitInstructionBuffer, voiceInitWorkingBuffer,
                                      port, channel, key, noteId, velocity, retune);
+        }
+
+        void moveVoice(typename Config::voice_t *voice, uint16_t port, uint16_t channel,
+                       uint16_t key, float velocity)
+        {
+            TPF;
+            voice->pckn = {port, channel, key, std::get<3>(voice->original_pckn)};
+        }
+
+        void moveAndRetriggerVoice(typename Config::voice_t *voice, uint16_t port, uint16_t channel,
+                                   uint16_t key, float velocity)
+        {
+            TPF;
+            assert(!voice->isGated);
+            voice->pckn = {port, channel, key, std::get<3>(voice->original_pckn)};
+            voice->isGated = true;
+            voice->releaseCountdown = 0;
+            voice->velocity = velocity;
         }
 
         void terminateVoice(Voice *v)
@@ -237,11 +261,20 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
             auto v = nv[i];
             if (!v)
                 continue;
+            if (voiceInitInstructionBuffer[i].instruction ==
+                sst::voicemanager::VoiceInitInstructionsEntry<Config>::Instruction::SKIP)
+            {
+                voiceInitWorkingBuffer[i].voice = nullptr;
+                continue;
+            }
             v->state = Voice::ACTIVE;
             v->runtime = 0;
             v->isGated = true;
             v->pckn = {port, channel, key, noteId};
+            v->original_pckn = v->pckn;
             v->velocity = velocity;
+            v->creationCount = lastCreationCount++;
+            TPT("Last Creation Count is now " << lastCreationCount);
 
             voiceInitWorkingBuffer[i].voice = v;
             TPT("  Set voice at " << i << " voices " << pcknToString(v->pckn));
@@ -474,7 +507,79 @@ struct TwoGroupsEveryKey : TestPlayer<voiceCount, doLog>
             v->runtime = 0;
             v->isGated = true;
             v->pckn = {port, channel, key, noteId};
+            v->original_pckn = v->pckn;
             v->velocity = velocity;
+            v->creationCount = this->lastCreationCount++;
+
+            voiceInitWorkingBuffer[i].voice = v;
+            TPT("  Set voice at " << i << " voices " << this->pcknToString(v->pckn));
+        }
+
+        return idx;
+    }
+};
+
+template <size_t voiceCount, bool doLog = false>
+struct ThreeGroupsEveryKey : TestPlayer<voiceCount, doLog>
+{
+    ThreeGroupsEveryKey()
+    {
+        this->voiceManager.guaranteeGroup(2112);
+        this->voiceManager.guaranteeGroup(90125);
+        this->voiceManager.guaranteeGroup(8675309);
+    }
+    int beginFn(typename sst::voicemanager::VoiceBeginBufferEntry<
+                    typename TestPlayer<voiceCount, doLog>::Config>::buffer_t &buf,
+                uint16_t port, uint16_t channel, uint16_t key, int32_t noteid,
+                float velocity) override
+    {
+        buf[0].polyphonyGroup = 2112;
+        buf[1].polyphonyGroup = 90125;
+        buf[2].polyphonyGroup = 8675309;
+        return 3;
+    }
+    int32_t initFn(
+        int voices,
+        const typename sst::voicemanager::VoiceInitInstructionsEntry<
+            typename TestPlayer<voiceCount, doLog>::Config>::buffer_t &voiceInitInstructionBuffer,
+        typename sst::voicemanager::VoiceInitBufferEntry<
+            typename TestPlayer<voiceCount, doLog>::Config>::buffer_t &voiceInitWorkingBuffer,
+        uint16_t port, uint16_t channel, uint16_t key, int32_t noteId, float velocity,
+        float retune) override
+    {
+        assert(voices == 3);
+        typename TestPlayer<voiceCount, doLog>::Voice *nv[3]{nullptr, nullptr, nullptr};
+
+        int idx = 0;
+        for (auto &v : this->voiceStorage)
+        {
+            if (v.state != TestPlayer<voiceCount, doLog>::Voice::ACTIVE)
+            {
+                nv[idx] = &v;
+                TPT("Assigning voice at " << idx << " from " << &v);
+                ++idx;
+                if (idx == 3)
+                    break;
+            }
+        }
+
+        idx = 0;
+        for (int i = 0; i < voices; ++i)
+        {
+            if (voiceInitInstructionBuffer[i].instruction ==
+                TestPlayer<voiceCount, doLog>::voiceManager_t::initInstruction_t::Instruction::SKIP)
+                continue;
+            auto v = nv[idx];
+            idx++;
+            if (!v)
+                continue;
+            v->state = TestPlayer<voiceCount, doLog>::Voice::ACTIVE;
+            v->runtime = 0;
+            v->isGated = true;
+            v->pckn = {port, channel, key, noteId};
+            v->original_pckn = v->pckn;
+            v->velocity = velocity;
+            v->creationCount = this->lastCreationCount++;
 
             voiceInitWorkingBuffer[i].voice = v;
             TPT("  Set voice at " << i << " voices " << this->pcknToString(v->pckn));
@@ -509,7 +614,7 @@ struct TwoGroupsEveryKey : TestPlayer<voiceCount, doLog>
 #define REQUIRE_KEY_COUNT(ct, keyNumber)                                                           \
     REQUIRE(tp.activeVoicesMatching([](const auto &v) { return v.key() == keyNumber; }) == ct)
 
-// #define REQUIRE_INCOMPLETE_TEST REQUIRE(false)
-#define REQUIRE_INCOMPLETE_TEST INFO("This test is currently incomplete");
+#define REQUIRE_INCOMPLETE_TEST REQUIRE(false)
+// #define REQUIRE_INCOMPLETE_TEST INFO("This test is currently incomplete");
 
 #endif // TEST_RESPONDERS_H

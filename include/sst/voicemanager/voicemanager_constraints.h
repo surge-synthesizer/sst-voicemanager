@@ -51,6 +51,10 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Const
            void (Responder::*)(std::function<void(typename Cfg::voice_t *)>))
     HASMEM(retriggerVoiceWithNewNoteID, Responder,
            void (Responder::*)(typename Cfg::voice_t *, int32_t, float))
+    HASMEM(moveVoice, Responder,
+           void (Responder::*)(typename Cfg::voice_t *, uint16_t, uint16_t, uint16_t, float))
+    HASMEM(moveAndRetriggerVoice, Responder,
+           void (Responder::*)(typename Cfg::voice_t *, uint16_t, uint16_t, uint16_t, float))
 
     HASMEM(beginVoiceCreationTransaction, Responder,
            int32_t (Responder::*)(typename VoiceBeginBufferEntry<Cfg>::buffer_t &, uint16_t,
