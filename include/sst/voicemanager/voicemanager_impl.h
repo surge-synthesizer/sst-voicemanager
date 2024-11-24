@@ -26,7 +26,7 @@
 
 namespace sst::voicemanager
 {
-static constexpr bool vmLog{false};
+static constexpr bool vmLog{true};
 #define VML(...)                                                                                   \
     {                                                                                              \
         if constexpr (vmLog)                                                                       \
@@ -694,7 +694,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                 {
                     if (details.voiceBeginWorkingBuffer[i].polyphonyGroup == mpg)
                     {
-                        VML("  - Setting instruction " << i << " to skip");
+                        VML("  - Setting instruction " << i << " to skip " << mpg);
                         details.voiceInitInstructionsBuffer[i].instruction =
                             VoiceInitInstructionsEntry<Cfg>::Instruction::SKIP;
                     }
@@ -729,6 +729,15 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         cid++;
     }
 
+    if constexpr (vmLog)
+    {
+        VML("- Instruction Buffer (size " << voicesToBeLaunched << ")");
+        for (int i = 0; i < voicesToBeLaunched; ++i)
+        {
+            VML("  - i=" << i << " inst=" << (int)details.voiceInitInstructionsBuffer[i].instruction
+                         << " pg=" << details.voiceBeginWorkingBuffer[i].polyphonyGroup);
+        }
+    }
     auto voicesLaunched = responder.initializeMultipleVoices(
         voicesToBeLaunched, details.voiceInitInstructionsBuffer, details.voiceInitWorkingBuffer,
         port, channel, key, noteid, velocity, retune);
@@ -749,46 +758,57 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
 
     auto voicesLeft = voicesLaunched;
     ++details.mostRecentTransactionID;
+    VML("- VoicesToBeLaunced " << voicesToBeLaunched << " voices launched " << voicesLaunched);
 
-    for (auto &vi : details.voiceInfo)
+    auto placeVoiceFromIndex = [&](int index)
     {
-        if (!vi.activeVoiceCookie)
+        for (auto &vi : details.voiceInfo)
         {
-            vi.voiceCounter = details.mostRecentVoiceCounter++;
-            vi.transactionId = details.mostRecentTransactionID;
-            vi.port = port;
-            vi.channel = channel;
-            vi.key = key;
-            vi.noteId = noteid;
-            vi.snapOriginalToCurrent();
-
-            vi.gated = true;
-            vi.gatedDueToSustain = false;
-            vi.activeVoiceCookie = details.voiceInitWorkingBuffer[voicesLeft - 1].voice;
-            vi.polyGroup = details.voiceBeginWorkingBuffer[voicesLeft - 1].polyphonyGroup;
-
-            details.keyStateByPort[vi.port][vi.channel][vi.key][vi.polyGroup] = {vi.transactionId,
-                                                                                 velocity};
-
-            VML("- New Voice assigned from "
-                << voicesLeft - 1 << " with " << details.mostRecentVoiceCounter
-                << " at pckn=" << port << "/" << channel << "/" << key << "/" << noteid
-                << " pg=" << vi.polyGroup << " avc=" << vi.activeVoiceCookie);
-
-            assert(details.usedVoices.find(vi.polyGroup) != details.usedVoices.end());
-            ++details.usedVoices.at(vi.polyGroup);
-            ++details.totalUsedVoices;
-
-            voicesLeft--;
-            if (voicesLeft == 0)
+            if (!vi.activeVoiceCookie)
             {
-                responder.endVoiceCreationTransaction(port, channel, key, noteid, velocity);
+                vi.voiceCounter = details.mostRecentVoiceCounter++;
+                vi.transactionId = details.mostRecentTransactionID;
+                vi.port = port;
+                vi.channel = channel;
+                vi.key = key;
+                vi.noteId = noteid;
+                vi.snapOriginalToCurrent();
 
-                details.debugDumpKeyState(port);
+                vi.gated = true;
+                vi.gatedDueToSustain = false;
+                vi.activeVoiceCookie = details.voiceInitWorkingBuffer[index].voice;
+                vi.polyGroup = details.voiceBeginWorkingBuffer[index].polyphonyGroup;
+
+                VML("- New Voice assigned from "
+                    << index << " with " << details.mostRecentVoiceCounter << " at pckn=" << port
+                    << "/" << channel << "/" << key << "/" << noteid << " pg=" << vi.polyGroup
+                    << " avc=" << vi.activeVoiceCookie);
+
+                assert(details.usedVoices.find(vi.polyGroup) != details.usedVoices.end());
+                ++details.usedVoices.at(vi.polyGroup);
+                ++details.totalUsedVoices;
                 return true;
             }
         }
+        return false;
+    };
+
+    for (int i = 0; i < voicesToBeLaunched; ++i)
+    {
+        details.keyStateByPort[port][channel][key]
+                              [details.voiceBeginWorkingBuffer[i].polyphonyGroup] = {
+            details.mostRecentTransactionID, velocity};
+
+        if (details.voiceInitInstructionsBuffer[i].instruction !=
+                VoiceInitInstructionsEntry<Cfg>::Instruction::SKIP &&
+            details.voiceInitWorkingBuffer[i].voice)
+        {
+            placeVoiceFromIndex(i);
+            voicesLeft--;
+        }
     }
+
+    // assert(voicesLeft == 0);
 
     responder.endVoiceCreationTransaction(port, channel, key, noteid, velocity);
 
@@ -856,8 +876,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                         }
                         else
                         {
-                            VML("- Release voice with other away " << vi.polyGroup << " "
-                                                                   << vi.activeVoiceCookie);
+                            VML("- Release voice completely (no other)" << vi.polyGroup << " "
+                                                                        << vi.activeVoiceCookie);
                             responder.releaseVoice(vi.activeVoiceCookie, velocity);
                         }
                         vi.gated = false;

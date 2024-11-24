@@ -442,6 +442,54 @@ TEST_CASE("Legato Mono Mode - Mixed Group Poly/Mono/Legato")
     REQUIRE_VOICE_MATCH(1, v.creationCount <= 3);
 }
 
+TEST_CASE("Legato Mono Mode - Mixed with Mono Mode across Release")
+{
+    for (auto cs = 0; cs < 4; ++cs)
+    {
+        DYNAMIC_SECTION("Testing case " << cs)
+        {
+            auto tp = TwoGroupsEveryKey<32, true>();
+            using vm_t = TwoGroupsEveryKey<32, true>::voiceManager_t;
+            auto &vm = tp.voiceManager;
+            ;
+
+            auto modea = (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO;
+            auto modeb = (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO;
+            if (cs == 1)
+                modeb = modea;
+            if (cs == 2)
+                modea = modeb;
+            if (cs == 3)
+                std::swap(modea, modeb);
+
+            INFO("Modes are " << modea << " " << modeb);
+            vm.setPlaymode(2112, vm_t::PlayMode::MONO_NOTES, modea);
+            vm.setPlaymode(90125, vm_t::PlayMode::MONO_NOTES, modeb);
+
+            REQUIRE_NO_VOICES;
+            vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+            tp.processFor(1);
+            REQUIRE_VOICE_COUNTS(2, 2);
+            vm.processNoteOffEvent(0, 0, 60, -1, 0.8);
+            tp.processFor(1);
+            REQUIRE_VOICE_COUNTS(2, 0);
+
+            vm.processNoteOnEvent(0, 0, 62, -1, 0.8, 0);
+            tp.processFor(1);
+            REQUIRE_VOICE_COUNTS(2, 2);
+            vm.processNoteOffEvent(0, 0, 62, -1, 0.8);
+            tp.processFor(1);
+            REQUIRE_VOICE_COUNTS(2, 0);
+
+            vm.processNoteOnEvent(0, 0, 64, -1, 0.8, 0);
+            tp.processFor(1);
+            REQUIRE_VOICE_COUNTS(2, 2);
+            vm.processNoteOffEvent(0, 0, 64, -1, 0.8);
+            tp.processFor(1);
+            REQUIRE_VOICE_COUNTS(2, 0);
+        }
+    }
+}
 /*
 TEST_CASE("Legato Mono Mode - Multi-voice complex") { REQUIRE_INCOMPLETE_TEST; }
 TEST_CASE("Legato Mono Mode - Mixed Group Poly/Legato") { REQUIRE_INCOMPLETE_TEST; }
