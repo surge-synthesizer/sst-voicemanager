@@ -121,14 +121,14 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         void moveVoice(typename Config::voice_t *voice, uint16_t port, uint16_t channel,
                        uint16_t key, float velocity)
         {
-            TPF;
+            TPT(__func__ << " " << TPD(testPlayer.pcknToString(voice->pckn)));
             voice->pckn = {port, channel, key, std::get<3>(voice->original_pckn)};
         }
 
         void moveAndRetriggerVoice(typename Config::voice_t *voice, uint16_t port, uint16_t channel,
                                    uint16_t key, float velocity)
         {
-            TPF;
+            TPT(__func__ << " " << TPD(testPlayer.pcknToString(voice->pckn)));
             assert(!voice->isGated);
             voice->pckn = {port, channel, key, std::get<3>(voice->original_pckn)};
             voice->isGated = true;
@@ -144,7 +144,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         }
         void releaseVoice(Voice *v, float velocity)
         {
-            TPF;
+            TPT("Release voice at " << TPD(testPlayer.pcknToString(v->pckn)));
             v->isGated = false;
             v->releaseCountdown = 5;
             v->releaseVelocity = velocity;
@@ -498,7 +498,10 @@ struct TwoGroupsEveryKey : TestPlayer<voiceCount, doLog>
         {
             if (voiceInitInstructionBuffer[i].instruction ==
                 TestPlayer<voiceCount, doLog>::voiceManager_t::initInstruction_t::Instruction::SKIP)
+            {
+                TPT("Skipping voice at " << i);
                 continue;
+            }
             auto v = nv[idx];
             idx++;
             if (!v)
