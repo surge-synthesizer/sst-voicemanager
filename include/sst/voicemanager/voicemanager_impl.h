@@ -496,7 +496,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
     {
         if constexpr (vmLog)
         {
-            VML(">>>> Dump Key State");
+            VML(">>>> Dump Key State " << port);
             auto &ks = keyStateByPort.at(port);
             for (int ch = 0; ch < 16; ++ch)
             {
@@ -504,17 +504,18 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
                 {
                     if (!ks[ch][k].empty())
                     {
-                        VML("- State at " << ch << "/" << k);
+                        VML(">>>> - State at " << ch << "/" << k);
                         auto &vmap = ks[ch][k];
                         for (const auto &[pg, it] : vmap)
                         {
-                            VML("   - PG=" << pg);
-                            VML("     " << it.transaction << "/" << it.inceptionVelocity << "/"
-                                        << it.heldBySustain);
+                            VML(">>>>   - PG=" << pg);
+                            VML(">>>>     " << it.transaction << "/" << it.inceptionVelocity << "/"
+                                            << it.heldBySustain);
                         }
                     }
                 }
             }
+            VML("<<<< Dump Key State");
         }
     }
 };
@@ -670,7 +671,8 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
             {
                 if (v.activeVoiceCookie && v.polyGroup == mpg)
                 {
-                    VML("  - Moving existing voice " << v.activeVoiceCookie << " to " << key);
+                    VML("  - Moving existing voice " << &v << " " << v.activeVoiceCookie << " to "
+                                                     << key << " (" << v.gated << ")");
                     if (v.gated)
                     {
                         responder.moveVoice(v.activeVoiceCookie, port, channel, key, velocity);
@@ -743,21 +745,30 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         port, channel, key, noteid, velocity, retune);
 
     VML("- Voices created " << voicesLaunched);
+    details.debugDumpKeyState(port);
 
     if (voicesLaunched != voicesToBeLaunched)
     {
         // This is probably OK
     }
 
+    ++details.mostRecentTransactionID;
     if (voicesLaunched == 0)
     {
+        for (int i = 0; i < voicesToBeLaunched; ++i)
+        {
+            // bail but still record the key press
+            details.keyStateByPort[port][channel][key]
+                                  [details.voiceBeginWorkingBuffer[i].polyphonyGroup] = {
+                details.mostRecentTransactionID, velocity};
+        }
+
         responder.endVoiceCreationTransaction(port, channel, key, noteid, velocity);
 
         return false;
     }
 
     auto voicesLeft = voicesLaunched;
-    ++details.mostRecentTransactionID;
     VML("- VoicesToBeLaunced " << voicesToBeLaunched << " voices launched " << voicesLaunched);
 
     auto placeVoiceFromIndex = [&](int index)
@@ -828,18 +839,37 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
     {
         if (vi.matches(port, channel, key, noteid))
         {
-            VML("- Found matching release note at " << vi.polyGroup << " " << vi.key);
+            VML("- Found matching release note at " << vi.polyGroup << " " << vi.key << " "
+                                                    << vi.gated);
             if (details.playMode[vi.polyGroup] == PlayMode::MONO_NOTES)
             {
                 if (details.playModeFeatures[vi.polyGroup] &
                     (uint64_t)MonoPlayModeFeatures::MONO_LEGATO)
                 {
                     bool anyOtherOption = details.anyKeyHeldFor(port, vi.polyGroup, channel, key);
+                    VML("- AnoyOther check for legato at " << vi.polyGroup << " " << (int)channel
+                                                           << " " << (int)key << " is "
+                                                           << anyOtherOption);
                     if (anyOtherOption)
                     {
                         retriggerGroups.insert(vi.polyGroup);
                         VML("- A key is down in same group. Initiating mono legato move");
                         continue;
+                    }
+                    else
+                    {
+                        auto &ks = details.keyStateByPort[port];
+                        for (int ch = 0; ch < 16; ++ch)
+                        {
+                            for (int k = 0; k < 128; ++k)
+                            {
+                                for (const auto &[g, s] : ks[ch][k])
+                                {
+                                    VML("=== Held Key " << g << " " << s.transaction
+                                                        << " at k=" << (int)k << " ch=" << (int)ch)
+                                }
+                            }
+                        }
                     }
                 }
                 if (details.sustainOn)
@@ -854,6 +884,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                         VML("- There's a gated key away so untrigger this");
                         retriggerGroups.insert(vi.polyGroup);
                         responder.terminateVoice(vi.activeVoiceCookie);
+                        VML("- Gated to False ***");
                         vi.gated = false;
                     }
                     else
@@ -880,6 +911,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                                                                         << vi.activeVoiceCookie);
                             responder.releaseVoice(vi.activeVoiceCookie, velocity);
                         }
+                        VML("- Gated to False ***");
                         vi.gated = false;
                     }
                 }
@@ -896,6 +928,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                     if (vi.gated)
                     {
                         responder.releaseVoice(vi.activeVoiceCookie, velocity);
+                        VML("- Gated to False ***");
                         vi.gated = false;
                     }
                 }
@@ -958,6 +991,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::updateSustainPedal(int16_t por
 
                     details.keyStateByPort[vi.port][vi.channel][vi.key] = {};
 
+                    VML("- Gated to False ***");
                     vi.gated = false;
                     vi.gatedDueToSustain = false;
                 }
@@ -1137,6 +1171,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::allNotesOff()
         if (v.activeVoiceCookie)
         {
             responder.releaseVoice(v.activeVoiceCookie, 0);
+            VML("- Gated to False ***");
             v.gated = false;
         }
     }
