@@ -28,6 +28,7 @@
 #include <map>
 
 #include "sst/voicemanager/voicemanager.h"
+#include <algorithm>
 
 #define TPT(...)                                                                                   \
     if constexpr (doLog)                                                                           \
@@ -290,15 +291,17 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         MonoResponder(TestPlayer &p) : testPlayer(p) {}
         void setMIDIPitchBend(int16_t channel, int16_t pb14bit)
         {
-            testPlayer.pitchBend[channel] = pb14bit;
+            testPlayer.pitchBend[std::clamp(channel, (int16_t)0, (int16_t)15)] = pb14bit;
         }
         void setMIDI1CC(int16_t channel, int16_t cc, int8_t val)
         {
-            testPlayer.midi1CC[channel][cc] = val;
+            assert(channel >= 0 && channel < 16);
+            testPlayer.midi1CC[std::clamp(channel, (int16_t)0, (int16_t)15)][cc] = val;
         }
         void setMIDIChannelPressure(int16_t channel, int16_t pres)
         {
-            testPlayer.channelPressure[channel] = pres;
+            assert(channel >= 0 && channel < 16);
+            testPlayer.channelPressure[std::clamp(channel, (int16_t)0, (int16_t)15)] = pres;
         }
     } monoResponder;
 

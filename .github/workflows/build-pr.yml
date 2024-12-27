@@ -29,6 +29,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: pick GCC12
+        if: runner.os == 'Linux'
+        run: |
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 12
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 12
+
       - name: Build test
         run: |
           cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release -DSST_VOICEMANAGER_BUILD_TESTS=TRUE 
