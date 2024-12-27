@@ -290,14 +290,17 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         MonoResponder(TestPlayer &p) : testPlayer(p) {}
         void setMIDIPitchBend(int16_t channel, int16_t pb14bit)
         {
+            assert(channel >=0 && channel < 16);
             testPlayer.pitchBend[channel] = pb14bit;
         }
         void setMIDI1CC(int16_t channel, int16_t cc, int8_t val)
         {
+            assert(channel >=0 && channel < 16);
             testPlayer.midi1CC[channel][cc] = val;
         }
         void setMIDIChannelPressure(int16_t channel, int16_t pres)
         {
+            assert(channel >=0 && channel < 16);
             testPlayer.channelPressure[channel] = pres;
         }
     } monoResponder;
