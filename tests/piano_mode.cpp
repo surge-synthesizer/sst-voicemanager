@@ -111,3 +111,11 @@ TEST_CASE("Poly Multi Key Non Piano Mode")
         REQUIRE_VOICE_COUNTS(3, 3);
     }
 }
+/*
+TEST_CASE("Piano Mode Sustain Pedal")
+{
+    SECTION("Multile notes, no retrig, sustain") { REQUIRE_INCOMPLETE_TEST; }
+
+    SECTION("Retrigger a note under sustain") { REQUIRE_INCOMPLETE_TEST; }
+}
+*/

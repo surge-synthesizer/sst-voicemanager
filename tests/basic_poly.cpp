@@ -315,3 +315,92 @@ TEST_CASE("AllSoundsOff")
 
     REQUIRE_VOICE_COUNTS(0, 0);
 }
+
+TEST_CASE("Cross Channel Sustain Pedal")
+{
+    SECTION("One Note, Sus Other Channel, MIDI1")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1;
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        vm.updateSustainPedal(0, 2, 120);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        vm.processNoteOffEvent(0, 0, 60, -1, 0.4);
+        REQUIRE_VOICE_COUNTS(1, 0);
+        tp.processFor(40);
+        REQUIRE_VOICE_COUNTS(0, 0);
+
+        vm.updateSustainPedal(0, 2, 0);
+        tp.processFor(10);
+        REQUIRE_NO_VOICES;
+        ;
+    }
+
+    SECTION("Two Note, Sus One of the Channels")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1;
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+        vm.processNoteOnEvent(0, 2, 64, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        vm.updateSustainPedal(0, 2, 120);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        vm.processNoteOffEvent(0, 0, 60, -1, 0.4);
+        REQUIRE_VOICE_COUNTS(2, 1);
+        tp.processFor(40);
+        REQUIRE_VOICE_COUNTS(1, 1);
+
+        vm.processNoteOffEvent(0, 2, 64, -1, 0.4);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+
+        vm.updateSustainPedal(0, 2, 0);
+        REQUIRE_VOICE_COUNTS(1, 0);
+        tp.processFor(20);
+        REQUIRE_NO_VOICES;
+        ;
+    }
+
+    SECTION("MPE Mode Global Channel")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1_MPE;
+        vm.processNoteOnEvent(0, 1, 60, -1, 0.8, 0.0);
+        vm.processNoteOnEvent(0, 2, 64, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        vm.updateSustainPedal(0, 0, 120);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        vm.processNoteOffEvent(0, 1, 60, -1, 0.4);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        tp.processFor(40);
+        REQUIRE_VOICE_COUNTS(2, 2);
+
+        vm.processNoteOffEvent(0, 2, 64, -1, 0.4);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(2, 2);
+
+        vm.updateSustainPedal(0, 0, 0);
+        REQUIRE_VOICE_COUNTS(2, 0);
+        tp.processFor(20);
+        REQUIRE_NO_VOICES;
+    }
+}
