@@ -111,11 +111,143 @@ TEST_CASE("Poly Multi Key Non Piano Mode")
         REQUIRE_VOICE_COUNTS(3, 3);
     }
 }
-/*
+
 TEST_CASE("Piano Mode Sustain Pedal")
 {
-    SECTION("Multile notes, no retrig, sustain") { REQUIRE_INCOMPLETE_TEST; }
+    SECTION("Single notes, no retrig, sustain")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
 
-    SECTION("Retrigger a note under sustain") { REQUIRE_INCOMPLETE_TEST; }
+        vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1;
+        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        vm.updateSustainPedal(0, 0, 120);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        vm.processNoteOffEvent(0, 0, 60, -1, 0.4);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(40);
+        REQUIRE_VOICE_COUNTS(1, 1);
+
+        vm.updateSustainPedal(0, 0, 0);
+        REQUIRE_VOICE_COUNTS(1, 0);
+        tp.processFor(20);
+
+        REQUIRE_NO_VOICES;
+    }
+
+    SECTION("Multiple notes, no retrig, sustain")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1;
+        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+        vm.processNoteOnEvent(0, 0, 64, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        vm.updateSustainPedal(0, 0, 120);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        vm.processNoteOffEvent(0, 0, 60, -1, 0.4);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        tp.processFor(40);
+        REQUIRE_VOICE_COUNTS(2, 2);
+
+        vm.updateSustainPedal(0, 0, 0);
+        REQUIRE_VOICE_COUNTS(2, 1);
+        tp.processFor(20);
+        REQUIRE_VOICE_COUNTS(1, 1);
+
+        vm.processNoteOffEvent(0, 0, 64, -1, 0.4);
+        REQUIRE_VOICE_COUNTS(1, 0);
+
+        tp.processFor(20);
+        REQUIRE_NO_VOICES;
+    }
+
+    SECTION("Retrigger a note under sustain and release during sustain")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1;
+        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        vm.updateSustainPedal(0, 0, 120);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        vm.processNoteOffEvent(0, 0, 60, -1, 0.4);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(40);
+        REQUIRE_VOICE_COUNTS(1, 1);
+
+        INFO("About to retrigger");
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(40);
+
+        vm.processNoteOffEvent(0, 0, 60, -1, 0.8);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(40);
+
+        vm.updateSustainPedal(0, 0, 0);
+        REQUIRE_VOICE_COUNTS(1, 0);
+        tp.processFor(20);
+        REQUIRE_VOICE_COUNTS(0, 0);
+
+        tp.processFor(20);
+        REQUIRE_NO_VOICES;
+    }
+
+    SECTION("Retrigger a note under sustain and release outside sustain")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1;
+        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        vm.updateSustainPedal(0, 0, 120);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        vm.processNoteOffEvent(0, 0, 60, -1, 0.4);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(40);
+        REQUIRE_VOICE_COUNTS(1, 1);
+
+        INFO("About to retrigger");
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(40);
+
+        vm.updateSustainPedal(0, 0, 0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(10);
+        vm.processNoteOffEvent(0, 0, 60, -1, 0.8);
+        REQUIRE_VOICE_COUNTS(1, 0);
+
+        tp.processFor(20);
+        REQUIRE_NO_VOICES;
+    }
 }
-*/

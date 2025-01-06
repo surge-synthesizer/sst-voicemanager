@@ -550,8 +550,12 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
             {
                 responder.retriggerVoiceWithNewNoteID(vi.activeVoiceCookie, noteid, velocity);
                 vi.gated = true;
+                // We are not gated because of sustain; we are gated because we are gated.
+                // If we release we will turn gatedDueToSustain back on
+                vi.gatedDueToSustain = false;
                 vi.voiceCounter = ++details.mostRecentVoiceCounter;
                 vi.transactionId = details.mostRecentTransactionID;
+
                 didAnyRetrigger = true;
             }
         }
