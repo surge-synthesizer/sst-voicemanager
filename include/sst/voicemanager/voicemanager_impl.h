@@ -42,6 +42,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
     Details(VoiceManager<Cfg, Responder, MonoResponder> &in) : vm(in)
     {
         std::fill(lastPBByChannel.begin(), lastPBByChannel.end(), 0);
+        std::fill(sustainOn.begin(), sustainOn.end(), false);
 
         keyStateByPort[0] = {};
         guaranteeGroup(0);
@@ -119,7 +120,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
     typename VoiceInitBufferEntry<Cfg>::buffer_t voiceInitWorkingBuffer;
     typename VoiceInitInstructionsEntry<Cfg>::buffer_t voiceInitInstructionsBuffer;
     std::array<std::array<uint16_t, 128>, 16> midiCCCache{};
-    bool sustainOn{false};
+    std::array<bool, 16> sustainOn{};
     std::array<int16_t, 16> lastPBByChannel{};
 
     void doMonoPitchBend(int16_t port, int16_t channel, int16_t pb14bit)
@@ -872,7 +873,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                         }
                     }
                 }
-                if (details.sustainOn)
+                auto susCh = dialect == MIDI1Dialect::MIDI1_MPE ? 0 : channel;
+                if (details.sustainOn[susCh])
                 {
                     VML("- Release with sustain on. Checking to see if there are gated voices "
                         "away");
@@ -919,7 +921,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
             else
             {
                 // Poly branch ere
-                if (details.sustainOn)
+                auto susCh = dialect == MIDI1Dialect::MIDI1_MPE ? 0 : channel;
+                if (details.sustainOn[susCh])
                 {
                     vi.gatedDueToSustain = true;
                 }
@@ -936,7 +939,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
         }
     }
 
-    if (details.sustainOn)
+    auto susCh = dialect == MIDI1Dialect::MIDI1_MPE ? 0 : channel;
+    if (details.sustainOn[susCh])
     {
         VML("- Updating just-by-sustain at " << port << " " << channel << " " << key);
         for (auto &inf : details.keyStateByPort[port][channel][key])
@@ -962,13 +966,14 @@ template <typename Cfg, typename Responder, typename MonoResponder>
 void VoiceManager<Cfg, Responder, MonoResponder>::updateSustainPedal(int16_t port, int16_t channel,
                                                                      int8_t level)
 {
-    auto sop = details.sustainOn;
-    details.sustainOn = level > 64;
-    if (sop != details.sustainOn)
+    auto sop = details.sustainOn[channel];
+    details.sustainOn[channel] = level > 64;
+    if (sop != details.sustainOn[channel])
     {
-        if (!details.sustainOn)
+        if (!details.sustainOn[channel])
         {
             VML("Sustain Release");
+            auto channelMatch = dialect == MIDI1Dialect::MIDI1_MPE ? -1 : channel;
             std::unordered_set<uint64_t> retriggerGroups;
             // release all voices with sustain gates
             for (auto &vi : details.voiceInfo)
@@ -977,7 +982,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::updateSustainPedal(int16_t por
                     continue;
 
                 VML("- Checking " << vi.gated << " " << vi.gatedDueToSustain << " " << vi.key);
-                if (vi.gatedDueToSustain && vi.matches(port, channel, -1, -1))
+                if (vi.gatedDueToSustain && vi.matches(port, channelMatch, -1, -1))
                 {
                     if (details.playMode[vi.polyGroup] == PlayMode::MONO_NOTES)
                     {
