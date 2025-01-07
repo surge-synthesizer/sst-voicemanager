@@ -26,7 +26,7 @@
 
 namespace sst::voicemanager
 {
-static constexpr bool vmLog{true};
+static constexpr bool vmLog{false};
 #define VML(...)                                                                                   \
     {                                                                                              \
         if constexpr (vmLog)                                                                       \
