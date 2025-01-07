@@ -26,7 +26,7 @@
 
 namespace sst::voicemanager
 {
-static constexpr bool vmLog{false};
+static constexpr bool vmLog{true};
 #define VML(...)                                                                                   \
     {                                                                                              \
         if constexpr (vmLog)                                                                       \
@@ -991,7 +991,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::updateSustainPedal(int16_t por
                     if (details.playMode[vi.polyGroup] == PlayMode::MONO_NOTES)
                     {
                         retriggerGroups.insert(vi.polyGroup);
-                        responder.terminateVoice(vi.activeVoiceCookie);
+                        responder.releaseVoice(vi.activeVoiceCookie, 0);
                     }
                     else
                     {
