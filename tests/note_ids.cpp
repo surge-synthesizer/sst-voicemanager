@@ -149,7 +149,121 @@ TEST_CASE("Note ID in Poly Mode")
 
 TEST_CASE("Note ID in Poly Piano Mode")
 {
-    // REQUIRE_INCOMPLETE_TEST;
+    /*
+     * Piano Mode is the same as poly *except* for repeated key.
+     * So the trick is to test this with a single key and see if
+     * the note id re-assigns, and then also to test it with a voice
+     * stack on a single key (a harder case)
+     */
+    SECTION("Single Key")
+    {
+        auto tp = TestPlayer<32, false>();
+        typedef TestPlayer<32, false>::voiceManager_t vm_t;
+        typedef TestPlayer<32, false>::Voice vc_t;
+        vm_t &vm = tp.voiceManager;
+
+        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+
+        vm.processNoteOnEvent(0, 1, 60, 173, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(10);
+        vm.processNoteOffEvent(0, 1, 60, 173, 0.8);
+        REQUIRE_VOICE_COUNTS(1, 0);
+        tp.processFor(20);
+        REQUIRE_NO_VOICES;
+
+        // now do the same thing where we restart
+        vm.processNoteOnEvent(0, 1, 60, 864, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(10);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60 && v.noteid() == 864; });
+
+        vm.processNoteOffEvent(0, 1, 60, 864, 0.8);
+        REQUIRE_VOICE_COUNTS(1, 0);
+        tp.processFor(2);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60 && v.noteid() == 864; });
+        REQUIRE_VOICE_COUNTS(1, 0);
+
+        vm.processNoteOnEvent(0, 1, 60, 7742, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE_VOICE_MATCH_FN(1,
+                               [](const vc_t &v) { return v.key() == 60 && v.noteid() == 7742; });
+        tp.processFor(10);
+        vm.processNoteOffEvent(0, 1, 60, 7742, 0.8);
+        REQUIRE_VOICE_COUNTS(1, 0);
+        tp.processFor(20);
+        REQUIRE_VOICE_COUNTS(0, 0);
+    }
+
+    SECTION("Stacked Voices")
+    {
+        auto tp = TestPlayer<32, false>();
+        typedef TestPlayer<32, false>::voiceManager_t vm_t;
+        typedef TestPlayer<32, false>::Voice vc_t;
+        vm_t &vm = tp.voiceManager;
+
+        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+
+        vm.processNoteOnEvent(0, 1, 60, 173, 0.8, 0.0);
+        vm.processNoteOnEvent(0, 1, 60, 174, 0.8, 0.0);
+        vm.processNoteOnEvent(0, 1, 60, 175, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(3, 3);
+        tp.processFor(10);
+        vm.processNoteOffEvent(0, 1, 60, 173, 0.8);
+        vm.processNoteOffEvent(0, 1, 60, 174, 0.8);
+        vm.processNoteOffEvent(0, 1, 60, 175, 0.8);
+        REQUIRE_VOICE_COUNTS(3, 0);
+        tp.processFor(2);
+        REQUIRE_VOICE_COUNTS(3, 0);
+
+        // now do the same thing where we restart
+        vm.processNoteOnEvent(0, 1, 60, 864, 0.8, 0.0);
+        vm.processNoteOnEvent(0, 1, 60, 865, 0.8, 0.0);
+        vm.processNoteOnEvent(0, 1, 60, 866, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(3, 3);
+        tp.processFor(10);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60 && v.noteid() == 864; });
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60 && v.noteid() == 865; });
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60 && v.noteid() == 866; });
+    }
+
+    SECTION("Stacked Voices with Varied Stack Sizes")
+    {
+        auto tp = TestPlayer<32, false>();
+        typedef TestPlayer<32, false>::voiceManager_t vm_t;
+        typedef TestPlayer<32, false>::Voice vc_t;
+        vm_t &vm = tp.voiceManager;
+
+        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+
+        vm.processNoteOnEvent(0, 1, 60, 173, 0.8, 0.0);
+        vm.processNoteOnEvent(0, 1, 60, 174, 0.8, 0.0);
+        vm.processNoteOnEvent(0, 1, 60, 175, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(3, 3);
+        tp.processFor(10);
+        vm.processNoteOffEvent(0, 1, 60, 173, 0.8);
+        vm.processNoteOffEvent(0, 1, 60, 174, 0.8);
+        vm.processNoteOffEvent(0, 1, 60, 175, 0.8);
+        REQUIRE_VOICE_COUNTS(3, 0);
+        tp.processFor(2);
+        REQUIRE_VOICE_COUNTS(3, 0);
+
+        // now do the same thing where we restart
+        vm.processNoteOnEvent(0, 1, 60, 864, 0.8, 0.0);
+        vm.processNoteOnEvent(0, 1, 60, 865, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(3, 2);
+        tp.processFor(2);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60 && v.noteid() == 864; });
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60 && v.noteid() == 865; });
+        // this test is stronger than our guarantee. It just so happens that last is the
+        // one we don't re-steal but it could be any.
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60 && v.noteid() == 175; });
+
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(2, 2);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60 && v.noteid() == 864; });
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60 && v.noteid() == 865; });
+    }
 }
 
 TEST_CASE("Note ID in Mono Mode")
