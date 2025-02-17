@@ -156,6 +156,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
             v->isGated = true;
             v->releaseCountdown = 0;
             v->velocity = velocity;
+            std::get<3>(v->pckn) = noteid;
         }
 
         int beginVoiceCreationTransaction(

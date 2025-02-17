@@ -548,6 +548,14 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         {
             if (vi.matches(port, channel, key, -1)) // dont match noteid
             {
+                /*
+                 * This condition allows voice stacks to occur. See the
+                 * 'Stacked Voices' piano mode note id test for instance
+                 */
+                if (vi.gated && !vi.gatedDueToSustain)
+                {
+                    continue;
+                }
                 responder.retriggerVoiceWithNewNoteID(vi.activeVoiceCookie, noteid, velocity);
                 vi.gated = true;
                 // We are not gated because of sustain; we are gated because we are gated.
@@ -556,6 +564,16 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                 vi.voiceCounter = ++details.mostRecentVoiceCounter;
                 vi.transactionId = details.mostRecentTransactionID;
 
+                // if both legs have note ids then only do one voice
+                auto hadNoteId = vi.noteId != -1;
+                auto hasNoteId = noteid != -1;
+
+                vi.noteId = noteid;
+
+                if (hadNoteId && hasNoteId)
+                {
+                    return true;
+                }
                 didAnyRetrigger = true;
             }
         }
