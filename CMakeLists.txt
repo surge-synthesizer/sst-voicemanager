@@ -30,6 +30,7 @@ if (${bldtest})
             tests/legato_playback.cpp
             tests/piano_mode.cpp
             tests/midi1_to_vm.cpp
+            tests/note_ids.cpp
 
             libs/catch2/catch_amalgamated.cpp
         )
