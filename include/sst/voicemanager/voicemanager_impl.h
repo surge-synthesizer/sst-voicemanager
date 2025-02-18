@@ -56,6 +56,10 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         int16_t port{0}, channel{0}, key{0};
         int32_t noteId{-1};
 
+        static constexpr size_t noteIdStackSize{256};
+        std::array<int32_t, noteIdStackSize> noteIdStack;
+        size_t noteIdStackPos{0};
+
         int16_t originalPort{0}, originalChannel{0}, originalKey{0};
 
         int64_t voiceCounter{0}, transactionId{0};
@@ -73,7 +77,13 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             res = res && (pt == -1 || port == -1 || pt == port);
             res = res && (ch == -1 || channel == -1 || ch == channel);
             res = res && (k == -1 || key == -1 || k == key);
-            res = res && (nid == -1 || noteId == -1 || nid == noteId);
+            if (nid != -1 && noteId != -1)
+            {
+                bool anyMatch{false};
+                for (auto i = 0U; i < noteIdStackPos; ++i)
+                    anyMatch = anyMatch || (noteIdStack[i] == nid);
+                res = res && anyMatch;
+            }
             return res;
         }
 
@@ -82,6 +92,34 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             originalPort = port;
             originalChannel = channel;
             originalKey = key;
+        }
+
+        void removeNoteIdFromStack(int32_t nid)
+        {
+            VML("- Remove note id from stack " << nid << " " << this);
+            int shift{0};
+            for (auto i = 0U; i < noteIdStackPos; ++i)
+            {
+                VML("   - NIDSTack at " << i << " " << noteIdStack[i] << " " << nid
+                                        << " shift=" << shift);
+                if (noteIdStack[i] == nid)
+                {
+                    shift = 1;
+                }
+                else
+                {
+                    noteIdStack[i] = noteIdStack[i + shift];
+                }
+            }
+            noteIdStackPos--;
+            if constexpr (vmLog)
+            {
+                VML("   - NIDSTack pos is now " << noteIdStackPos);
+                for (auto i = 0U; i < noteIdStackPos; ++i)
+                {
+                    VML("      - " << i << " -> " << noteIdStack[i]);
+                }
+            }
         }
     };
     std::array<VoiceInfo, Cfg::maxVoiceCount> voiceInfo;
@@ -563,6 +601,9 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                 vi.gatedDueToSustain = false;
                 vi.voiceCounter = ++details.mostRecentVoiceCounter;
                 vi.transactionId = details.mostRecentTransactionID;
+                vi.noteIdStack[vi.noteIdStackPos] = noteid;
+                vi.noteIdStackPos =
+                    (vi.noteIdStackPos + 1) & (Details::VoiceInfo::noteIdStackSize - 1);
 
                 // if both legs have note ids then only do one voice
                 auto hadNoteId = vi.noteId != -1;
@@ -699,6 +740,9 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                     if (v.gated)
                     {
                         responder.moveVoice(v.activeVoiceCookie, port, channel, key, velocity);
+                        v.noteIdStack[v.noteIdStackPos] = noteid;
+                        v.noteIdStackPos =
+                            (v.noteIdStackPos + 1) & (Details::VoiceInfo::noteIdStackSize - 1);
                     }
                     else
                     {
@@ -812,6 +856,8 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                 vi.gatedDueToSustain = false;
                 vi.activeVoiceCookie = details.voiceInitWorkingBuffer[index].voice;
                 vi.polyGroup = details.voiceBeginWorkingBuffer[index].polyphonyGroup;
+                vi.noteIdStackPos = 1;
+                vi.noteIdStack[0] = noteid;
 
                 VML("- New Voice assigned from "
                     << index << " with " << details.mostRecentVoiceCounter << " at pckn=" << port
@@ -980,7 +1026,18 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
 
     for (const auto &rtg : retriggerGroups)
     {
+        VML("- Retriggering mono group " << rtg);
         details.doMonoRetrigger(port, rtg);
+        if (noteid >= 0)
+        {
+            for (auto &vi : details.voiceInfo)
+            {
+                if (vi.polyGroup == rtg && vi.activeVoiceCookie)
+                {
+                    vi.removeNoteIdFromStack(noteid);
+                }
+            }
+        }
     }
 }
 

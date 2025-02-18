@@ -388,8 +388,8 @@ TEST_CASE("Legato Mono Mode - Retrigger during Release")
 }
 TEST_CASE("Legato Mono Mode - Mixed Group Poly/Mono/Legato")
 {
-    auto tp = ThreeGroupsEveryKey<32, true>();
-    typedef ThreeGroupsEveryKey<32, true>::voiceManager_t vm_t;
+    auto tp = ThreeGroupsEveryKey<32, false>();
+    typedef ThreeGroupsEveryKey<32, false>::voiceManager_t vm_t;
     auto &vm = tp.voiceManager;
 
     vm.setPlaymode(2112, vm_t::PlayMode::POLY_VOICES);
@@ -402,27 +402,12 @@ TEST_CASE("Legato Mono Mode - Mixed Group Poly/Mono/Legato")
 
     vm.processNoteOnEvent(0, 0, 60, -1, 0.9, 0.0);
     tp.processFor(1);
-
-    for (auto &v : tp.voiceStorage)
-    {
-        if (v.state == TestPlayer<32, true>::Voice::ACTIVE)
-        {
-            std::cout << v.key() << " " << v.originalKey() << " " << v.creationCount << std::endl;
-        }
-    }
     REQUIRE_VOICE_COUNTS(3, 3);
     REQUIRE_VOICE_MATCH(3, v.key() == 60);
     REQUIRE_VOICE_MATCH(3, v.creationCount <= 3);
 
     vm.processNoteOnEvent(0, 0, 62, -1, 0.9, 0.0);
     tp.processFor(1);
-    for (auto &v : tp.voiceStorage)
-    {
-        if (v.state == TestPlayer<32, true>::Voice::ACTIVE)
-        {
-            std::cout << v.key() << " " << v.originalKey() << " " << v.creationCount << std::endl;
-        }
-    }
     REQUIRE_VOICE_COUNTS(4, 4);
     REQUIRE_VOICE_MATCH(3, v.key() == 62);
     REQUIRE_VOICE_MATCH(1, v.key() == 60);
@@ -448,8 +433,8 @@ TEST_CASE("Legato Mono Mode - Mixed with Mono Mode across Release")
     {
         DYNAMIC_SECTION("Testing case " << cs)
         {
-            auto tp = TwoGroupsEveryKey<32, true>();
-            using vm_t = TwoGroupsEveryKey<32, true>::voiceManager_t;
+            auto tp = TwoGroupsEveryKey<32, false>();
+            using vm_t = TwoGroupsEveryKey<32, false>::voiceManager_t;
             auto &vm = tp.voiceManager;
             ;
 
