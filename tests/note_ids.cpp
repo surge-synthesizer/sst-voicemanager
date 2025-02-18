@@ -273,5 +273,60 @@ TEST_CASE("Note ID in Mono Mode")
 
 TEST_CASE("Note ID in Mono Legato Mode")
 {
-    // REQUIRE_INCOMPLETE_TEST;
+    SECTION("Note ID for Single Note works")
+    {
+        auto tp = TestPlayer<32, false>();
+        typedef TestPlayer<32, false>::voiceManager_t vm_t;
+        typedef TestPlayer<32, false>::Voice vc_t;
+        vm_t &vm = tp.voiceManager;
+
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                       (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+
+        vm.processNoteOnEvent(0, 1, 60, 173, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE(tp.activeVoicesMatching([](const vc_t &v) { return v.noteid() == 173; }) == 1);
+        tp.processFor(10);
+        vm.processNoteOffEvent(0, 1, 60, 173, 0.8);
+        REQUIRE_VOICE_COUNTS(1, 0);
+        REQUIRE(tp.activeVoicesMatching([](const vc_t &v) { return v.noteid() == 173; }) == 1);
+        tp.processFor(20);
+        REQUIRE_NO_VOICES;
+    }
+
+    SECTION("On On Off Off works with Note ID")
+    {
+        auto tp = TestPlayer<32, false>();
+        typedef TestPlayer<32, false>::voiceManager_t vm_t;
+        typedef TestPlayer<32, false>::Voice vc_t;
+        vm_t &vm = tp.voiceManager;
+
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                       (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+
+        vm.processNoteOnEvent(0, 1, 60, 173, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60 && v.noteid() == 173; });
+        tp.processFor(10);
+
+        // play an e and it moves the note
+        vm.processNoteOnEvent(0, 1, 65, 184, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 65; });
+        tp.processFor(10);
+
+        // Now release the E whic returns to the C
+        vm.processNoteOffEvent(0, 1, 65, 184, 0.8);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.isGated && v.key() == 60; });
+        tp.processFor(10);
+
+        // Then release that held c
+        vm.processNoteOffEvent(0, 1, 60, 173, 0.8);
+        REQUIRE_VOICE_COUNTS(1, 0);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return !v.isGated && v.key() == 60; });
+        tp.processFor(20);
+
+        REQUIRE_NO_VOICES;
+    }
 }
