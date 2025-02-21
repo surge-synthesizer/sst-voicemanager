@@ -275,7 +275,8 @@ TEST_CASE("Note ID On Off works in Mono Modes")
     for (auto mode : {(uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO,
                       (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO})
     {
-        auto modestr = (mode == (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO) ? "legato" : "mono";
+        auto modestr =
+            (mode == (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO) ? "legato" : "mono";
         DYNAMIC_SECTION("Note ID for Single Note works " << modestr)
         {
             auto tp = player_t();
