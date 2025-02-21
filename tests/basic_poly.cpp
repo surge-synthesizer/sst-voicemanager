@@ -404,3 +404,18 @@ TEST_CASE("Cross Channel Sustain Pedal")
         REQUIRE_NO_VOICES;
     }
 }
+
+TEST_CASE("VM Voice Count drops post release")
+{
+    TestPlayer<32> tp;
+    auto &vm = tp.voiceManager;
+    REQUIRE(vm.getVoiceCount() == 0);
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+    tp.processFor(3);
+    REQUIRE(vm.getVoiceCount() == 1);
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.4);
+    tp.processFor(3);
+    REQUIRE(vm.getVoiceCount() == 1);
+    tp.processFor(50);
+    REQUIRE(vm.getVoiceCount() == 0);
+}
