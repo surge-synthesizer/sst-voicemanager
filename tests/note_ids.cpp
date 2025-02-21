@@ -266,67 +266,138 @@ TEST_CASE("Note ID in Poly Piano Mode")
     }
 }
 
-TEST_CASE("Note ID in Mono Mode")
+TEST_CASE("Note ID On Off works in Mono Modes")
 {
-    // REQUIRE_INCOMPLETE_TEST;
-}
+    typedef TestPlayer<32, false> player_t;
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+    typedef TestPlayer<32, false>::Voice vc_t;
 
-TEST_CASE("Note ID in Mono Legato Mode")
-{
-    SECTION("Note ID for Single Note works")
+    for (auto mode : {(uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO,
+                      (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO})
     {
-        auto tp = TestPlayer<32, false>();
-        typedef TestPlayer<32, false>::voiceManager_t vm_t;
-        typedef TestPlayer<32, false>::Voice vc_t;
-        vm_t &vm = tp.voiceManager;
+        auto modestr = (mode == (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO) ? "legato" : "mono";
+        DYNAMIC_SECTION("Note ID for Single Note works " << modestr)
+        {
+            auto tp = player_t();
+            vm_t &vm = tp.voiceManager;
 
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                       (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+            vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, mode);
 
-        vm.processNoteOnEvent(0, 1, 60, 173, 0.8, 0.0);
-        REQUIRE_VOICE_COUNTS(1, 1);
-        REQUIRE(tp.activeVoicesMatching([](const vc_t &v) { return v.noteid() == 173; }) == 1);
-        tp.processFor(10);
-        vm.processNoteOffEvent(0, 1, 60, 173, 0.8);
-        REQUIRE_VOICE_COUNTS(1, 0);
-        REQUIRE(tp.activeVoicesMatching([](const vc_t &v) { return v.noteid() == 173; }) == 1);
-        tp.processFor(20);
-        REQUIRE_NO_VOICES;
-    }
+            vm.processNoteOnEvent(0, 1, 60, 173, 0.8, 0.0);
+            REQUIRE_VOICE_COUNTS(1, 1);
+            REQUIRE(tp.activeVoicesMatching([](const vc_t &v) { return v.noteid() == 173; }) == 1);
+            tp.processFor(10);
+            vm.processNoteOffEvent(0, 1, 60, 173, 0.8);
+            REQUIRE_VOICE_COUNTS(1, 0);
+            REQUIRE(tp.activeVoicesMatching([](const vc_t &v) { return v.noteid() == 173; }) == 1);
+            tp.processFor(20);
+            REQUIRE_NO_VOICES;
+        }
 
-    SECTION("On On Off Off works with Note ID")
-    {
-        auto tp = TestPlayer<32, false>();
-        typedef TestPlayer<32, false>::voiceManager_t vm_t;
-        typedef TestPlayer<32, false>::Voice vc_t;
-        vm_t &vm = tp.voiceManager;
+        DYNAMIC_SECTION("On On Off Off works with Note ID " << modestr)
+        {
+            auto tp = TestPlayer<32, false>();
+            typedef TestPlayer<32, false>::voiceManager_t vm_t;
+            typedef TestPlayer<32, false>::Voice vc_t;
+            vm_t &vm = tp.voiceManager;
 
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                       (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+            vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, mode);
 
-        vm.processNoteOnEvent(0, 1, 60, 173, 0.8, 0.0);
-        REQUIRE_VOICE_COUNTS(1, 1);
-        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60 && v.noteid() == 173; });
-        tp.processFor(10);
+            vm.processNoteOnEvent(0, 1, 60, 173, 0.8, 0.0);
+            REQUIRE_VOICE_COUNTS(1, 1);
+            REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v)
+                                   { return v.key() == 60 && v.noteid() == 173; });
+            tp.processFor(10);
 
-        // play an e and it moves the note
-        vm.processNoteOnEvent(0, 1, 65, 184, 0.8, 0.0);
-        REQUIRE_VOICE_COUNTS(1, 1);
-        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 65; });
-        tp.processFor(10);
+            // play an e and it moves the note
+            vm.processNoteOnEvent(0, 1, 65, 184, 0.8, 0.0);
+            REQUIRE_VOICE_COUNTS(1, 1);
+            REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 65; });
+            tp.processFor(10);
 
-        // Now release the E whic returns to the C
-        vm.processNoteOffEvent(0, 1, 65, 184, 0.8);
-        REQUIRE_VOICE_COUNTS(1, 1);
-        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.isGated && v.key() == 60; });
-        tp.processFor(10);
+            // Now release the E whic returns to the C
+            vm.processNoteOffEvent(0, 1, 65, 184, 0.8);
+            REQUIRE_VOICE_COUNTS(1, 1);
+            REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.isGated && v.key() == 60; });
+            tp.processFor(10);
 
-        // Then release that held c
-        vm.processNoteOffEvent(0, 1, 60, 173, 0.8);
-        REQUIRE_VOICE_COUNTS(1, 0);
-        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return !v.isGated && v.key() == 60; });
-        tp.processFor(20);
+            // Then release that held c
+            vm.processNoteOffEvent(0, 1, 60, 173, 0.8);
+            REQUIRE_VOICE_COUNTS(1, 0);
+            REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return !v.isGated && v.key() == 60; });
+            tp.processFor(20);
 
-        REQUIRE_NO_VOICES;
+            REQUIRE_NO_VOICES;
+        }
+
+        // Now dynamically do a set of three note versions
+        std::vector<std::pair<uint8_t, int32_t>> notes{
+            {60, 1842}, {65, 104242}, {70, 819}, {65, 2223}};
+
+        struct Instruction
+        {
+            int idx;
+            bool on;
+            float expectedidx;
+        };
+
+        typedef std::vector<Instruction> testCase;
+        std::vector<testCase> testCases{{{0, true, 0},
+                                         {1, true, 1},
+                                         {2, true, 2},
+                                         {2, false, 1},
+                                         {1, false, 0},
+                                         {0, false, -1}},
+                                        {{0, true, 0}, {1, true, 1}, {0, false, 1}, {1, false, -1}},
+
+                                        {
+                                            {0, true, 0},
+                                            {1, true, 1},
+                                            {2, true, 2},
+                                            {1, false, 2},
+                                            {3, true, 3},
+                                            {3, false, 2},
+                                            {1, false, 2},
+                                            {0, false, 2},
+                                            {2, false, -1},
+                                        }};
+
+        int tidx{0};
+
+        for (auto &tc : testCases)
+        {
+            DYNAMIC_SECTION("Test Case " << tidx++ << " " << modestr)
+            {
+                auto tp = TestPlayer<32, false>();
+                typedef TestPlayer<32, false>::voiceManager_t vm_t;
+                typedef TestPlayer<32, false>::Voice vc_t;
+                vm_t &vm = tp.voiceManager;
+
+                vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, mode);
+
+                for (const auto &inst : tc)
+                {
+                    auto n = notes[inst.idx];
+                    if (inst.on)
+                    {
+                        vm.processNoteOnEvent(0, 1, n.first, n.second, 0.8, 0.0);
+                    }
+                    else
+                    {
+                        vm.processNoteOffEvent(0, 1, n.first, n.second, 0.8);
+                    }
+                    if (inst.expectedidx != -1)
+                    {
+                        REQUIRE_VOICE_MATCH_FN(1, [n = notes[inst.expectedidx]](const vc_t &v)
+                                               { return v.key() == n.first; });
+                    }
+                    else
+                    {
+                        REQUIRE_VOICE_COUNTS(1, 0);
+                    }
+                    tp.processFor(5);
+                }
+            }
+        }
     }
 }
