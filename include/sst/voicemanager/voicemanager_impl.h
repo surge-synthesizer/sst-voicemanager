@@ -606,6 +606,10 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                 {
                     continue;
                 }
+
+                if (vi.voiceId > 0)
+                    responder.discardHostVoice(vi.voiceId);
+
                 responder.retriggerVoiceWithNewNoteID(vi.activeVoiceCookie, noteid, velocity);
                 vi.gated = true;
                 // We are not gated because of sustain; we are gated because we are gated.
@@ -622,6 +626,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                 auto hasNoteId = noteid != -1;
 
                 vi.noteId = noteid;
+                vi.voiceId = noteid;
 
                 if (hadNoteId && hasNoteId)
                 {

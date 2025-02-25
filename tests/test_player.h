@@ -159,6 +159,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
             v->isGated = true;
             v->releaseCountdown = 0;
             v->velocity = velocity;
+            v->voiceId = noteid;
             std::get<3>(v->pckn) = noteid;
         }
 
