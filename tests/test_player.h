@@ -51,6 +51,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
 {
     using pckn_t = std::tuple<int16_t, int16_t, int16_t, int32_t>;
     int32_t lastCreationCount{1};
+    std::unordered_set<int32_t> terminatedVoiceSet;
 
     struct Voice
     {
@@ -68,6 +69,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
 
         pckn_t pckn{-1, -1, -1, -1};
         pckn_t original_pckn{-1, -1, -1, -1};
+        int32_t voiceId;
 
         int8_t polyATValue{0};
 
@@ -141,6 +143,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         {
             TPT("Terminate voice at " << TPD(testPlayer.pcknToString(v->pckn)));
             testPlayer.voiceEndCallback(v);
+            testPlayer.terminatedVoiceSet.insert(v->voiceId);
             *v = Voice();
         }
         void releaseVoice(Voice *v, float velocity)
@@ -207,6 +210,12 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         {
             TPF;
             v->mpeTimbre = t;
+        }
+
+        void discardHostVoice(int32_t voiceId)
+        {
+            TPF;
+            testPlayer.terminatedVoiceSet.insert(voiceId);
         }
 
     } responder;
@@ -282,6 +291,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
             v->original_pckn = v->pckn;
             v->velocity = velocity;
             v->creationCount = lastCreationCount++;
+            v->voiceId = noteId;
             TPT("Last Creation Count is now " << lastCreationCount);
 
             voiceInitWorkingBuffer[i].voice = v;
@@ -339,6 +349,8 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
                         {
                             voiceEndCallback(&v);
                         }
+                        terminatedVoiceSet.insert(v.voiceId);
+
                         v.state = Voice::State::UNUSED;
                     }
                 }
