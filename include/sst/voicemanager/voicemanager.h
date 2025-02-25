@@ -36,7 +36,7 @@ namespace sst::voicemanager
 
 /**
  * VoiceInitBufferEntry is the object which the responder needs to populate
- * in the voice intiaition creation lifecycle.
+ * in the voice initiation creation lifecycle.
  *
  * @tparam Cfg the voice manager configuration trait
  */
@@ -61,7 +61,7 @@ template <typename Cfg> struct VoiceInitInstructionsEntry
     {
         START,    ///< Start a new voice at this entry
         SKIP,     ///< Skip this voice altogether. The voice manager has discarded it
-        MOVE_FROM ///< The voice at thius index is a move of the voice pointer
+        MOVE_FROM ///< The voice at this index is a move of the voice pointer
     } instruction{Instruction::START};
 
     typename Cfg::voice_t *moveFromVoice{nullptr};
@@ -92,13 +92,13 @@ template <typename Cfg> struct VoiceBeginBufferEntry
  * - blah
  * - blah
  *
- * The VoiceManager collaborates with your symth through three
+ * The VoiceManager collaborates with your synth through three
  *
  * @tparam Cfg A configuration trait, setting the hard (physical) voice limit and voice type
  * @tparam Responder A class responsible for responding to voice-level activities such as creation,
  * termination, setting of voice level properties, and so forth
- * @tparam MonoResponder A class responsible for responding to monophoni activities such as MIDI CC
- * and Channel PitchBend (which are monopnonic in non-MPE mode)
+ * @tparam MonoResponder A class responsible for responding to monophonic activities such as MIDI CC
+ * and Channel PitchBend (which are monophonic in non-MPE mode)
  */
 template <typename Cfg, typename Responder, typename MonoResponder> struct VoiceManager
 {
@@ -134,9 +134,9 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
     };
 
     /**
-     * Mono Playmode is somewhat ambiguous, meaning many things. So lets enumerate the features.
+     * Mono Playmode is somewhat ambiguous, meaning many things. So let's enumerate the features.
      * Hope we have fewer than 64. Even though these are using the bits as features they are not all
-     * possible to be active simultaneusly. As well as distinct bit values, we provide a few
+     * possible to be active simultaneously. As well as distinct bit values, we provide a few
      * preset | combinations of flags for common use cases.
      */
     enum struct MonoPlayModeFeatures : uint64_t
@@ -154,7 +154,7 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
     };
 
     /**
-     * StealingPriorityMode deteremines how to pick a voice to steal when an appropriate voice or
+     * StealingPriorityMode determines how to pick a voice to steal when an appropriate voice or
      * note limit is met.  HIGHEST and LOWEST are in midi-key space.
      */
     enum struct StealingPriorityMode
@@ -192,17 +192,19 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
                              int32_t expression, double value);
 
     void routePolyphonicParameterModulation(int16_t port, int16_t channel, int16_t key,
-                                            int32_t noteid, uint32_t parameter, double value);
+                                            int32_t voiceid, uint32_t parameter, double value);
+    void routeMonophonicParameterModulation(int16_t port, int16_t channel, int16_t key,
+                                            uint32_t parameter, double value);
 
-    size_t getVoiceCount() const;
-    size_t getGatedVoiceCount() const;
+    [[nodiscard]] size_t getVoiceCount() const;
+    [[nodiscard]] size_t getGatedVoiceCount() const;
     void allNotesOff();
     void allSoundsOff();
 
     void guaranteeGroup(uint64_t groupId);
     void setPolyphonyGroupVoiceLimit(uint64_t groupId, int32_t limit);
     void setPlaymode(uint64_t groupId, PlayMode pm,
-                     uint64_t features = (uint64_t)MonoPlayModeFeatures::NONE);
+                     uint64_t features = static_cast<uint64_t>(MonoPlayModeFeatures::NONE));
     void setStealingPriorityMode(uint64_t groupId, StealingPriorityMode pm);
 
   private:

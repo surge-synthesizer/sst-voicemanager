@@ -18,7 +18,6 @@
 
 #include <type_traits>
 #include <functional>
-#include <array>
 #include <cstdint>
 
 namespace sst::voicemanager::constraints
@@ -72,6 +71,8 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Const
            void (Responder::*)(typename Cfg::voice_t *, int32_t, double))
     HASMEM(setVoicePolyphonicParameterModulation, Responder,
            void (Responder::*)(typename Cfg::voice_t *, uint32_t, double))
+    HASMEM(setVoiceMonophonicParameterModulation, Responder,
+           void (Responder::*)(typename Cfg::voice_t *, uint32_t, double))
     HASMEM(setPolyphonicAftertouch, Responder, void (Responder::*)(typename Cfg::voice_t *, int8_t))
 
     HASMEM(setVoiceMIDIMPEChannelPitchBend, Responder,
@@ -91,4 +92,4 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Const
 
 } // namespace sst::voicemanager::constraints
 
-#endif // VOICEMANAGER_CONSTRAINTS_H
+#endif // INCLUDE_SST_VOICEMANAGER_VOICEMANAGER_CONSTRAINTS_H

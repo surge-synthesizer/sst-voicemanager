@@ -54,10 +54,14 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
     struct VoiceInfo
     {
         int16_t port{0}, channel{0}, key{0};
-        int32_t noteId{-1};
+        int32_t noteId{-1}; // The note id is the id of the current playing note. In poly mode it is
+                            // same as voice id while gated
+        int32_t voiceId{
+            -1}; // The voice id is the id of the current voice. When voices are re-cycled in legato
+                 // and piano modes it can differ from note id. It is used for clap polymod.
 
         static constexpr size_t noteIdStackSize{256};
-        std::array<int32_t, noteIdStackSize> noteIdStack;
+        std::array<int32_t, noteIdStackSize> noteIdStack{};
         size_t noteIdStackPos{0};
 
         int16_t originalPort{0}, originalChannel{0}, originalKey{0};
@@ -84,6 +88,16 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
                     anyMatch = anyMatch || (noteIdStack[i] == nid);
                 res = res && anyMatch;
             }
+            return res;
+        }
+
+        bool matchesVoiceId(int16_t pt, int16_t ch, int16_t k, int32_t vid)
+        {
+            auto res = (activeVoiceCookie != nullptr);
+            res = res && (pt == -1 || port == -1 || pt == port);
+            res = res && (ch == -1 || channel == -1 || ch == channel);
+            res = res && (k == -1 || key == -1 || k == key);
+            res = res && (vid == -1 || voiceId == -1 || vid == voiceId);
             return res;
         }
 
@@ -122,12 +136,12 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             }
         }
     };
-    std::array<VoiceInfo, Cfg::maxVoiceCount> voiceInfo;
-    std::unordered_map<uint64_t, int32_t> polyLimits;
-    std::unordered_map<uint64_t, int32_t> usedVoices;
-    std::unordered_map<uint64_t, StealingPriorityMode> stealingPriorityMode;
-    std::unordered_map<uint64_t, PlayMode> playMode;
-    std::unordered_map<uint64_t, uint64_t> playModeFeatures;
+    std::array<VoiceInfo, Cfg::maxVoiceCount> voiceInfo{};
+    std::unordered_map<uint64_t, int32_t> polyLimits{};
+    std::unordered_map<uint64_t, int32_t> usedVoices{};
+    std::unordered_map<uint64_t, StealingPriorityMode> stealingPriorityMode{};
+    std::unordered_map<uint64_t, PlayMode> playMode{};
+    std::unordered_map<uint64_t, uint64_t> playModeFeatures{};
     int32_t totalUsedVoices{0};
 
     struct IndividualKeyState
@@ -151,20 +165,20 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         if (playMode.find(groupId) == playMode.end())
             playMode[groupId] = PlayMode::POLY_VOICES;
         if (playModeFeatures.find(groupId) == playModeFeatures.end())
-            playModeFeatures[groupId] = (uint64_t)MonoPlayModeFeatures::NONE;
+            playModeFeatures[groupId] = static_cast<uint64_t>(MonoPlayModeFeatures::NONE);
     }
 
-    typename VoiceBeginBufferEntry<Cfg>::buffer_t voiceBeginWorkingBuffer;
-    typename VoiceInitBufferEntry<Cfg>::buffer_t voiceInitWorkingBuffer;
-    typename VoiceInitInstructionsEntry<Cfg>::buffer_t voiceInitInstructionsBuffer;
+    typename VoiceBeginBufferEntry<Cfg>::buffer_t voiceBeginWorkingBuffer{};
+    typename VoiceInitBufferEntry<Cfg>::buffer_t voiceInitWorkingBuffer{};
+    typename VoiceInitInstructionsEntry<Cfg>::buffer_t voiceInitInstructionsBuffer{};
     std::array<std::array<uint16_t, 128>, 16> midiCCCache{};
     std::array<bool, 16> sustainOn{};
     std::array<int16_t, 16> lastPBByChannel{};
 
     void doMonoPitchBend(int16_t port, int16_t channel, int16_t pb14bit)
     {
-        if (channel >= 0 && channel < (int16_t)lastPBByChannel.size())
-            lastPBByChannel[channel] = pb14bit - 8192;
+        if (channel >= 0 && channel < static_cast<int16_t>(lastPBByChannel.size()))
+            lastPBByChannel[channel] = static_cast<int16_t>(pb14bit - 8192);
 
         vm.monoResponder.setMIDIPitchBend(channel, pb14bit);
     }
@@ -226,7 +240,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
 
         VML("- Finding stealable from " << polygroup << " with ignore " << ignorePolygroup);
 
-        for (int32_t vi = 0; vi < (int32_t)voiceInfo.size(); ++vi)
+        for (int32_t vi = 0; vi < static_cast<int32_t>(voiceInfo.size()); ++vi)
         {
             const auto &v = voiceInfo[vi];
             if (!v.activeVoiceCookie)
@@ -334,7 +348,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
 
         auto findBestKey = [&](bool ignoreSustain)
         {
-            if (ft & (uint64_t)MonoPlayModeFeatures::ON_RELEASE_TO_LATEST)
+            if (ft & static_cast<uint64_t>(MonoPlayModeFeatures::ON_RELEASE_TO_LATEST))
             {
                 int64_t mtx = 0;
                 for (int ch = 0; ch < 16; ++ch)
@@ -360,7 +374,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
                     }
                 }
             }
-            else if (ft & (uint64_t)MonoPlayModeFeatures::ON_RELEASE_TO_HIGHEST)
+            else if (ft & static_cast<uint64_t>(MonoPlayModeFeatures::ON_RELEASE_TO_HIGHEST))
             {
                 int64_t mk = 0;
                 for (int ch = 0; ch < 16; ++ch)
@@ -384,7 +398,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
                     }
                 }
             }
-            else if (ft & (uint64_t)MonoPlayModeFeatures::ON_RELEASE_TO_LOWEST)
+            else if (ft & static_cast<uint64_t>(MonoPlayModeFeatures::ON_RELEASE_TO_LOWEST))
             {
                 int64_t mk = 1024;
                 for (int ch = 0; ch < 16; ++ch)
@@ -415,7 +429,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         if (dch < 0)
             findBestKey(true);
 
-        if (ft & (uint64_t)MonoPlayModeFeatures::MONO_RETRIGGER && dch >= 0 && dk >= 0)
+        if (ft & static_cast<uint64_t>(MonoPlayModeFeatures::MONO_RETRIGGER) && dch >= 0 && dk >= 0)
         {
             // Need to know the velocity and the port
             VML("- retrigger Note " << dch << " " << dk << " " << dvel);
@@ -470,7 +484,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
                     ++usedVoices.at(vi.polyGroup);
                     ++totalUsedVoices;
 
-                    voicesLeft--;
+                    --voicesLeft;
                     if (voicesLeft == 0)
                     {
                         break;
@@ -484,7 +498,8 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             vm.responder.endVoiceCreationTransaction(port, dch, dk, dnid, dvel);
         }
 
-        else if (ft & (uint64_t)MonoPlayModeFeatures::MONO_LEGATO && dch >= 0 && dk >= 0)
+        else if (ft & static_cast<uint64_t>(MonoPlayModeFeatures::MONO_LEGATO) && dch >= 0 &&
+                 dk >= 0)
         {
             VML("- Move notes in group " << polyGroup << " to " << dch << "/" << dk);
             for (auto &v : voiceInfo)
@@ -668,7 +683,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         assert(details.polyLimits.find(polyGroup) != details.polyLimits.end());
 
         VML("Poly Stealing:");
-        VML("- Voice " << i << " group=" << polyGroup << " mode=" << (int)pm);
+        VML("- Voice " << i << " group=" << polyGroup << " mode=" << static_cast<int>(pm));
         VML("- Checking polygroup " << polyGroup);
         int32_t voiceLimit{details.polyLimits.at(polyGroup)};
         int32_t voicesUsed{details.usedVoices.at(polyGroup)};
@@ -725,8 +740,8 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
     for (const auto &mpg : monoGroups)
     {
         VML("- Would steal all voices in " << mpg);
-        auto isLegato =
-            details.playModeFeatures.at(mpg) & (uint64_t)MonoPlayModeFeatures::MONO_LEGATO;
+        auto isLegato = details.playModeFeatures.at(mpg) &
+                        static_cast<uint64_t>(MonoPlayModeFeatures::MONO_LEGATO);
         VML("- IsLegato : " << isLegato);
         if (isLegato)
         {
@@ -803,7 +818,8 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         VML("- Instruction Buffer (size " << voicesToBeLaunched << ")");
         for (int i = 0; i < voicesToBeLaunched; ++i)
         {
-            VML("  - i=" << i << " inst=" << (int)details.voiceInitInstructionsBuffer[i].instruction
+            VML("  - i=" << i << " inst="
+                         << static_cast<int>(details.voiceInitInstructionsBuffer[i].instruction)
                          << " pg=" << details.voiceBeginWorkingBuffer[i].polyphonyGroup);
         }
     }
@@ -858,6 +874,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                 vi.polyGroup = details.voiceBeginWorkingBuffer[index].polyphonyGroup;
                 vi.noteIdStackPos = 1;
                 vi.noteIdStack[0] = noteid;
+                vi.voiceId = noteid;
 
                 VML("- New Voice assigned from "
                     << index << " with " << details.mostRecentVoiceCounter << " at pckn=" << port
@@ -884,7 +901,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
             details.voiceInitWorkingBuffer[i].voice)
         {
             placeVoiceFromIndex(i);
-            voicesLeft--;
+            --voicesLeft;
         }
     }
 
@@ -913,12 +930,12 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
             if (details.playMode[vi.polyGroup] == PlayMode::MONO_NOTES)
             {
                 if (details.playModeFeatures[vi.polyGroup] &
-                    (uint64_t)MonoPlayModeFeatures::MONO_LEGATO)
+                    static_cast<uint64_t>(MonoPlayModeFeatures::MONO_LEGATO))
                 {
                     bool anyOtherOption = details.anyKeyHeldFor(port, vi.polyGroup, channel, key);
-                    VML("- AnoyOther check for legato at " << vi.polyGroup << " " << (int)channel
-                                                           << " " << (int)key << " is "
-                                                           << anyOtherOption);
+                    VML("- AnoyOther check for legato at "
+                        << vi.polyGroup << " " << static_cast<int>(channel) << " "
+                        << static_cast<int>(key) << " is " << anyOtherOption);
                     if (anyOtherOption)
                     {
                         retriggerGroups.insert(vi.polyGroup);
@@ -948,8 +965,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                         "away");
 
                     details.debugDumpKeyState(port);
-                    bool anyOtherOption = details.anyKeyHeldFor(port, vi.polyGroup, channel, key);
-                    if (anyOtherOption)
+                    if (details.anyKeyHeldFor(port, vi.polyGroup, channel, key))
                     {
                         VML("- There's a gated key away so untrigger this");
                         retriggerGroups.insert(vi.polyGroup);
@@ -1167,14 +1183,27 @@ void VoiceManager<Cfg, Responder, MonoResponder>::routeNoteExpression(int16_t po
 
 template <typename Cfg, typename Responder, typename MonoResponder>
 void VoiceManager<Cfg, Responder, MonoResponder>::routePolyphonicParameterModulation(
-    int16_t port, int16_t channel, int16_t key, int32_t noteid, uint32_t parameter, double value)
+    int16_t port, int16_t channel, int16_t key, int32_t voiceid, uint32_t parameter, double value)
 {
     for (auto &vi : details.voiceInfo)
     {
-        if (vi.matches(port, channel, key,
-                       noteid)) // all keys and notes on a channel for midi PB
+        if (vi.matchesVoiceId(port, channel, key,
+                              voiceid)) // all keys and notes on a channel for midi PB
         {
             responder.setVoicePolyphonicParameterModulation(vi.activeVoiceCookie, parameter, value);
+        }
+    }
+}
+
+template <typename Cfg, typename Responder, typename MonoResponder>
+void VoiceManager<Cfg, Responder, MonoResponder>::routeMonophonicParameterModulation(
+    int16_t port, int16_t channel, int16_t key, uint32_t parameter, double value)
+{
+    for (auto &vi : details.voiceInfo)
+    {
+        if (vi.activeVoiceCookie)
+        {
+            responder.setVoiceMonophonicParameterModulation(vi.activeVoiceCookie, parameter, value);
         }
     }
 }
@@ -1292,4 +1321,4 @@ void VoiceManager<Cfg, Responder, MonoResponder>::guaranteeGroup(uint64_t groupI
     details.guaranteeGroup(groupId);
 }
 } // namespace sst::voicemanager
-#endif // VOICEMANAGER_IMPL_H
+#endif // INCLUDE_SST_VOICEMANAGER_VOICEMANAGER_IMPL_H
