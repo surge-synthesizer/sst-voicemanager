@@ -143,7 +143,8 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         {
             TPT("Terminate voice at " << TPD(testPlayer.pcknToString(v->pckn)));
             testPlayer.voiceEndCallback(v);
-            testPlayer.terminatedVoiceSet.insert(v->voiceId);
+            if (v->voiceId != -1)
+                testPlayer.terminatedVoiceSet.insert(v->voiceId);
             *v = Voice();
         }
         void releaseVoice(Voice *v, float velocity)
@@ -350,7 +351,8 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
                         {
                             voiceEndCallback(&v);
                         }
-                        terminatedVoiceSet.insert(v.voiceId);
+                        if (v.voiceId != -1)
+                            terminatedVoiceSet.insert(v.voiceId);
 
                         v.state = Voice::State::UNUSED;
                     }
