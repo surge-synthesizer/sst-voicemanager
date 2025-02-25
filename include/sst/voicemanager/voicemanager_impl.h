@@ -91,12 +91,9 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             return res;
         }
 
-        bool matchesVoiceId(int16_t pt, int16_t ch, int16_t k, int32_t vid)
+        bool matchesVoiceId(int32_t vid)
         {
             auto res = (activeVoiceCookie != nullptr);
-            res = res && (pt == -1 || port == -1 || pt == port);
-            res = res && (ch == -1 || channel == -1 || ch == channel);
-            res = res && (k == -1 || key == -1 || k == key);
             res = res && (vid == -1 || voiceId == -1 || vid == voiceId);
             return res;
         }
@@ -764,6 +761,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                         responder.moveAndRetriggerVoice(v.activeVoiceCookie, port, channel, key,
                                                         velocity);
                     }
+                    responder.discardHostVoice(noteid);
                     v.port = port;
                     v.channel = channel;
                     v.key = key;
@@ -1187,8 +1185,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::routePolyphonicParameterModula
 {
     for (auto &vi : details.voiceInfo)
     {
-        if (vi.matchesVoiceId(port, channel, key,
-                              voiceid)) // all keys and notes on a channel for midi PB
+        if (vi.matchesVoiceId(voiceid))
         {
             responder.setVoicePolyphonicParameterModulation(vi.activeVoiceCookie, parameter, value);
         }

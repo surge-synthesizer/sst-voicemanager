@@ -59,12 +59,10 @@ template <typename Cfg> struct VoiceInitInstructionsEntry
 {
     enum struct Instruction
     {
-        START,    ///< Start a new voice at this entry
-        SKIP,     ///< Skip this voice altogether. The voice manager has discarded it
-        MOVE_FROM ///< The voice at this index is a move of the voice pointer
+        START, ///< Start a new voice at this entry
+        SKIP,  ///< Skip this voice altogether. The voice manager has discarded it
     } instruction{Instruction::START};
 
-    typename Cfg::voice_t *moveFromVoice{nullptr};
     using buffer_t = std::array<VoiceInitInstructionsEntry<Cfg>, Cfg::maxVoiceCount>;
 };
 
