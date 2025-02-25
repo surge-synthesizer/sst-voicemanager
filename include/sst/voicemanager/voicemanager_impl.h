@@ -54,9 +54,11 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
     struct VoiceInfo
     {
         int16_t port{0}, channel{0}, key{0};
-        int32_t noteId{-1}; // The note id is the id of the current playing note. In poly mode it is same as voice id while gated
-        int32_t voiceId{-1}; // The voice id is the id of the current voice. When voices are re-cycled in legato and piano modes
-                             // it can differ from note id. It is used for clap polymod.
+        int32_t noteId{-1}; // The note id is the id of the current playing note. In poly mode it is
+                            // same as voice id while gated
+        int32_t voiceId{
+            -1}; // The voice id is the id of the current voice. When voices are re-cycled in legato
+                 // and piano modes it can differ from note id. It is used for clap polymod.
 
         static constexpr size_t noteIdStackSize{256};
         std::array<int32_t, noteIdStackSize> noteIdStack{};
@@ -496,7 +498,8 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             vm.responder.endVoiceCreationTransaction(port, dch, dk, dnid, dvel);
         }
 
-        else if (ft & static_cast<uint64_t>(MonoPlayModeFeatures::MONO_LEGATO) && dch >= 0 && dk >= 0)
+        else if (ft & static_cast<uint64_t>(MonoPlayModeFeatures::MONO_LEGATO) && dch >= 0 &&
+                 dk >= 0)
         {
             VML("- Move notes in group " << polyGroup << " to " << dch << "/" << dk);
             for (auto &v : voiceInfo)
@@ -737,8 +740,8 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
     for (const auto &mpg : monoGroups)
     {
         VML("- Would steal all voices in " << mpg);
-        auto isLegato =
-            details.playModeFeatures.at(mpg) & static_cast<uint64_t>(MonoPlayModeFeatures::MONO_LEGATO);
+        auto isLegato = details.playModeFeatures.at(mpg) &
+                        static_cast<uint64_t>(MonoPlayModeFeatures::MONO_LEGATO);
         VML("- IsLegato : " << isLegato);
         if (isLegato)
         {
@@ -815,7 +818,8 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         VML("- Instruction Buffer (size " << voicesToBeLaunched << ")");
         for (int i = 0; i < voicesToBeLaunched; ++i)
         {
-            VML("  - i=" << i << " inst=" << static_cast<int>(details.voiceInitInstructionsBuffer[i].instruction)
+            VML("  - i=" << i << " inst="
+                         << static_cast<int>(details.voiceInitInstructionsBuffer[i].instruction)
                          << " pg=" << details.voiceBeginWorkingBuffer[i].polyphonyGroup);
         }
     }
@@ -929,8 +933,9 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                     static_cast<uint64_t>(MonoPlayModeFeatures::MONO_LEGATO))
                 {
                     bool anyOtherOption = details.anyKeyHeldFor(port, vi.polyGroup, channel, key);
-                    VML("- AnoyOther check for legato at " << vi.polyGroup << " " << static_cast<int>(channel) << " " << static_cast<int>(key) << " is "
-                                                           << anyOtherOption);
+                    VML("- AnoyOther check for legato at "
+                        << vi.polyGroup << " " << static_cast<int>(channel) << " "
+                        << static_cast<int>(key) << " is " << anyOtherOption);
                     if (anyOtherOption)
                     {
                         retriggerGroups.insert(vi.polyGroup);
@@ -1183,7 +1188,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::routePolyphonicParameterModula
     for (auto &vi : details.voiceInfo)
     {
         if (vi.matchesVoiceId(port, channel, key,
-                       vid)) // all keys and notes on a channel for midi PB
+                              voiceid)) // all keys and notes on a channel for midi PB
         {
             responder.setVoicePolyphonicParameterModulation(vi.activeVoiceCookie, parameter, value);
         }
