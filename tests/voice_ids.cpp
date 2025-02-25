@@ -18,6 +18,136 @@
 #include "sst/voicemanager/voicemanager.h"
 #include "test_player.h"
 
+TEST_CASE("Voice ID in Piano Mode")
+{
+    typedef TestPlayer<32, false> player_t;
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+    typedef TestPlayer<32, false>::Voice vc_t;
+
+    SECTION("Single Note and Termination")
+    {
+        auto tp = player_t();
+        vm_t &vm = tp.voiceManager;
+        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+
+        REQUIRE(vm.getVoiceCount() == 0);
+
+        tp.terminatedVoiceSet.clear();
+
+        vm.processNoteOnEvent(0, 0, 60, 742, 0.0, 0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        tp.processFor(10);
+        vm.processNoteOffEvent(0, 0, 60, 742, 0.0);
+        REQUIRE_VOICE_COUNTS(1, 0);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(0, 0);
+
+        REQUIRE(tp.terminatedVoiceSet.find(742) != tp.terminatedVoiceSet.end());
+    }
+
+    SECTION("Two Notes; Instant old note termination")
+    {
+        auto tp = player_t();
+        vm_t &vm = tp.voiceManager;
+        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+        REQUIRE(vm.getVoiceCount() == 0);
+
+        tp.terminatedVoiceSet.clear();
+
+        vm.processNoteOnEvent(0, 0, 60, 742, 0.0, 0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.voiceId == 742; });
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60; });
+        REQUIRE(tp.terminatedVoiceSet.empty());
+        tp.processFor(10);
+        vm.processNoteOffEvent(0, 0, 60, 742, 0.0);
+        tp.processFor(2);
+
+        vm.processNoteOnEvent(0, 0, 60, 8433, 0.0, 0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        INFO("In piano mode, the *new* voice id should win since its a new voice");
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.voiceId == 8433; });
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60; });
+        REQUIRE(tp.terminatedVoiceSet.find(742) != tp.terminatedVoiceSet.end());
+        REQUIRE(tp.terminatedVoiceSet.size() == 1);
+        tp.terminatedVoiceSet.clear();
+        tp.processFor(20);
+        vm.processNoteOffEvent(0, 0, 60, 8433, 0.0);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.voiceId == 8433; });
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60; });
+        REQUIRE(tp.terminatedVoiceSet.empty());
+        tp.processFor(10);
+
+        REQUIRE_VOICE_COUNTS(0, 0);
+        REQUIRE(tp.terminatedVoiceSet.find(8433) != tp.terminatedVoiceSet.end());
+        REQUIRE(tp.terminatedVoiceSet.size() == 1);
+    }
+
+    SECTION("Two Notes; Properties Route")
+    {
+        auto tp = player_t();
+        vm_t &vm = tp.voiceManager;
+        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+        REQUIRE(vm.getVoiceCount() == 0);
+
+        tp.terminatedVoiceSet.clear();
+
+        vm.processNoteOnEvent(0, 0, 60, 742, 0.0, 0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.voiceId == 742; });
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60; });
+
+        vm.routePolyphonicParameterModulation(0, 0, 60, 742, 123, 17.2);
+        vm.routeNoteExpression(0, 0, 60, 742, 11, 0.2);
+        REQUIRE_VOICE_MATCH_FN(
+            1, [](const vc_t &v)
+            { return v.voiceId == 742 && v.paramModulationCache.at(123) == 17.2; });
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v)
+                               { return v.voiceId == 742 && v.noteExpressionCache.at(11) == 0.2; });
+
+        vm.processNoteOffEvent(0, 0, 60, 742, 0.0);
+        tp.processFor(2);
+
+        vm.routePolyphonicParameterModulation(0, 0, 60, 742, 123, 9.2);
+        REQUIRE_VOICE_MATCH_FN(1,
+                               [](const vc_t &v) {
+                                   return v.voiceId == 742 && v.paramModulationCache.at(123) == 9.2;
+                               });
+
+        vm.processNoteOnEvent(0, 0, 60, 8433, 0.0, 0);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        INFO("In piano mode, the *new* voice id should win since its a new voice");
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.voiceId == 8433; });
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60; });
+        vm.routePolyphonicParameterModulation(0, 0, 60, 8433, 123, 17.7);
+        vm.routeNoteExpression(0, 0, 60, 8433, 11, 0.7);
+        REQUIRE_VOICE_MATCH_FN(
+            1, [](const vc_t &v)
+            { return v.voiceId == 8433 && v.paramModulationCache.at(123) == 17.7; });
+        REQUIRE_VOICE_MATCH_FN(
+            1,
+            [](const vc_t &v) { return v.voiceId == 8433 && v.noteExpressionCache.at(11) == 0.7; });
+        REQUIRE(tp.terminatedVoiceSet.find(742) != tp.terminatedVoiceSet.end());
+        REQUIRE(tp.terminatedVoiceSet.size() == 1);
+        tp.terminatedVoiceSet.clear();
+        tp.processFor(20);
+        vm.processNoteOffEvent(0, 0, 60, 8433, 0.0);
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.voiceId == 8433; });
+        REQUIRE_VOICE_MATCH_FN(1, [](const vc_t &v) { return v.key() == 60; });
+        vm.routePolyphonicParameterModulation(0, 0, 60, 8433, 123, 7.7);
+        REQUIRE_VOICE_MATCH_FN(
+            1, [](const vc_t &v)
+            { return v.voiceId == 8433 && v.paramModulationCache.at(123) == 7.7; });
+
+        REQUIRE(tp.terminatedVoiceSet.empty());
+        tp.processFor(10);
+
+        REQUIRE_VOICE_COUNTS(0, 0);
+        REQUIRE(tp.terminatedVoiceSet.find(8433) != tp.terminatedVoiceSet.end());
+        REQUIRE(tp.terminatedVoiceSet.size() == 1);
+    }
+}
+
 TEST_CASE("Voice ID in Legato Mode")
 {
     INFO("See doc/legatoNID.png for what this tests");
