@@ -182,6 +182,12 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
             TPF;
             v->paramModulationCache[e] = val;
         }
+        void setVoiceMonophonicParameterModulation(Voice *v, uint32_t e, double val)
+        {
+            TPF;
+            // v->paramModulationCache[e] = val;
+            // TODO - test this
+        }
         void setPolyphonicAftertouch(Voice *v, int8_t val)
         {
             TPF;
