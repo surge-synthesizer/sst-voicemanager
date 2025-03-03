@@ -402,3 +402,43 @@ TEST_CASE("Note ID On Off works in Mono Modes")
         }
     }
 }
+
+TEST_CASE("That Six Sines VST3 Case")
+{
+    typedef TestPlayer<32, false> player_t;
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+
+    INFO("Midi available in https://github.com/baconpaul/six-sines/issues/168");
+    for (auto useNoteId : {true, false})
+    {
+        DYNAMIC_SECTION("With " << (useNoteId ? "Note ID" : "Note ID Off"))
+        {
+            auto tp = player_t();
+            vm_t &vm = tp.voiceManager;
+
+            vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                           (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+
+            vm.processNoteOnEvent(0, 1, 69, useNoteId ? 69 : -1, 0.8, 0.0);
+            REQUIRE_VOICE_COUNTS(1, 1);
+            tp.processFor(2);
+            vm.processNoteOffEvent(0, 1, 69, useNoteId ? 69 : -1, 0.8);
+            REQUIRE_VOICE_COUNTS(1, 0);
+            tp.processFor(2);
+
+            vm.processNoteOnEvent(0, 1, 69, useNoteId ? 69 : -1, 0.8, 0.0);
+            REQUIRE_VOICE_COUNTS(1, 1);
+            tp.processFor(2);
+            vm.processNoteOffEvent(0, 1, 69, useNoteId ? 69 : -1, 0.8);
+            REQUIRE_VOICE_COUNTS(1, 0);
+            tp.processFor(2);
+
+            vm.processNoteOnEvent(0, 1, 65, useNoteId ? 65 : -1, 0.8, 0.0);
+            REQUIRE_VOICE_COUNTS(1, 1);
+            tp.processFor(2);
+            vm.processNoteOffEvent(0, 1, 65, useNoteId ? 65 : -1, 0.8);
+            REQUIRE_VOICE_COUNTS(1, 0);
+            tp.processFor(2);
+        }
+    }
+}
