@@ -757,15 +757,18 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                     if (v.gated)
                     {
                         responder.moveVoice(v.activeVoiceCookie, port, channel, key, velocity);
-                        v.noteIdStack[v.noteIdStackPos] = noteid;
-                        v.noteIdStackPos =
-                            (v.noteIdStackPos + 1) & (Details::VoiceInfo::noteIdStackSize - 1);
                     }
                     else
                     {
                         responder.moveAndRetriggerVoice(v.activeVoiceCookie, port, channel, key,
                                                         velocity);
                     }
+
+                    v.noteIdStack[v.noteIdStackPos] = noteid;
+                    v.noteIdStackPos =
+                        (v.noteIdStackPos + 1) & (Details::VoiceInfo::noteIdStackSize - 1);
+                    v.noteId = noteid;
+
                     responder.discardHostVoice(noteid);
                     v.port = port;
                     v.channel = channel;
