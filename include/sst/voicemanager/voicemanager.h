@@ -211,6 +211,8 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
 };
 } // namespace sst::voicemanager
 
+static_assert(__cplusplus >= 202002L, "Surge team libraries have moved to C++ 20");
+
 #include "voicemanager_impl.h"
 
 #endif // INCLUDE_SST_VOICEMANAGER_VOICEMANAGER_H

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(sst-voicemanager VERSION 0.5 LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 add_library(${PROJECT_NAME} INTERFACE)
 target_include_directories(${PROJECT_NAME} INTERFACE include)
@@ -14,6 +14,10 @@ endif()
 if (PROJECT_IS_TOP_LEVEL)
   set(bldtest TRUE)
 endif()
+
+if (MSVC)
+    target_compile_options(${PROJECT_NAME} INTERFACE /Zc:__cplusplus)
+endif ()
 
 if (${bldtest})
     add_executable(${PROJECT_NAME}-test
