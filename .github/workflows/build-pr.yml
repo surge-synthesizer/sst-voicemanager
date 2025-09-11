@@ -67,5 +67,5 @@ jobs:
 
       - name: Run Test
         run: |
-          ls -l build/tests
+          ls -l build
           ./build/sst-voicemanager-tests
