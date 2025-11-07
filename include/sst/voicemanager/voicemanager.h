@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <limits>
 #include <algorithm>
+#include <functional>
 
 /**
  * \mainpage SST Voice Manager
@@ -198,6 +199,7 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
     [[nodiscard]] size_t getGatedVoiceCount() const;
     void allNotesOff();
     void allSoundsOff();
+    void allSoundsOffMatching(std::function<bool(typename Cfg::voice_t *)>);
 
     void guaranteeGroup(uint64_t groupId);
     void setPolyphonyGroupVoiceLimit(uint64_t groupId, int32_t limit);
