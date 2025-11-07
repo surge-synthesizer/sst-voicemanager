@@ -1282,6 +1282,19 @@ void VoiceManager<Cfg, Responder, MonoResponder>::allSoundsOff()
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
+void VoiceManager<Cfg, Responder, MonoResponder>::allSoundsOffMatching(
+    std::function<bool(typename Cfg::voice_t *)> pred)
+{
+    for (const auto &v : details.voiceInfo)
+    {
+        if (v.activeVoiceCookie && pred(v.activeVoiceCookie))
+        {
+            responder.terminateVoice(v.activeVoiceCookie);
+        }
+    }
+}
+
+template <typename Cfg, typename Responder, typename MonoResponder>
 void VoiceManager<Cfg, Responder, MonoResponder>::allNotesOff()
 {
     for (auto &v : details.voiceInfo)
