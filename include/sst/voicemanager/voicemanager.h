@@ -207,6 +207,8 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
                      uint64_t features = static_cast<uint64_t>(MonoPlayModeFeatures::NONE));
     void setStealingPriorityMode(uint64_t groupId, StealingPriorityMode pm);
 
+    std::array<std::array<bool, 16>, 128> heldMIDIKeyByChannel;
+
   private:
     struct Details;
     Details details;

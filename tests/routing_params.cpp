@@ -221,7 +221,8 @@ TEST_CASE("Routing Note Expressions")
     REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 55; }) == 2);
     REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.noteExpressionCache.empty(); }) == 0);
     REQUIRE(tp.activeVoicesMatching(
-                [](auto &v) {
+                [](auto &v)
+                {
                     return v.key() == 55 &&
                            v.noteExpressionCache.find(2) != v.noteExpressionCache.end();
                 }) == 2);
@@ -300,7 +301,8 @@ TEST_CASE("Routing Poly Parameter Modulations")
     REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 55; }) == 2);
     REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.paramModulationCache.empty(); }) == 0);
     REQUIRE(tp.activeVoicesMatching(
-                [](auto &v) {
+                [](auto &v)
+                {
                     return v.key() == 55 &&
                            v.paramModulationCache.find(2) != v.paramModulationCache.end();
                 }) == 2);

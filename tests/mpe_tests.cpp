@@ -32,7 +32,8 @@ TEST_CASE("MPE Basic")
     REQUIRE_VOICE_COUNTS(2, 2);
 
     REQUIRE(tp.activeVoicesMatching(
-                [](auto &v) {
+                [](auto &v)
+                {
                     return (v.key() == 60 && v.channel() == 1) ||
                            (v.key() == 62 && v.channel() == 2);
                 }) == 2);

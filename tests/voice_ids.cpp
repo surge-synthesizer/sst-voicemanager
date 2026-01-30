@@ -109,10 +109,9 @@ TEST_CASE("Voice ID in Piano Mode")
         tp.processFor(2);
 
         vm.routePolyphonicParameterModulation(0, 0, 60, 742, 123, 9.2);
-        REQUIRE_VOICE_MATCH_FN(1,
-                               [](const vc_t &v) {
-                                   return v.voiceId == 742 && v.paramModulationCache.at(123) == 9.2;
-                               });
+        REQUIRE_VOICE_MATCH_FN(
+            1, [](const vc_t &v)
+            { return v.voiceId == 742 && v.paramModulationCache.at(123) == 9.2; });
 
         vm.processNoteOnEvent(0, 0, 60, 8433, 0.0, 0);
         REQUIRE_VOICE_COUNTS(1, 1);
@@ -244,10 +243,9 @@ TEST_CASE("Voice ID in Legato Mode")
         vm.routePolyphonicParameterModulation(0, 0, 60, 742, 123, 8.2);
         INFO("And routing to the new voice should do nothing since it is terminated");
         vm.routePolyphonicParameterModulation(0, 0, 62, 8433, 123, 8.7);
-        REQUIRE_VOICE_MATCH_FN(1,
-                               [](const vc_t &v) {
-                                   return v.voiceId == 742 && v.paramModulationCache.at(123) == 8.2;
-                               });
+        REQUIRE_VOICE_MATCH_FN(
+            1, [](const vc_t &v)
+            { return v.voiceId == 742 && v.paramModulationCache.at(123) == 8.2; });
 
         INFO("This one is the under voice and should be ignored");
         vm.routeNoteExpression(0, 0, 60, 742, 11, 0.1);
