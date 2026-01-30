@@ -577,6 +577,10 @@ VoiceManager<Cfg, Responder, MonoResponder>::VoiceManager(Responder &r, MonoResp
 {
     static_assert(constraints::ConstraintsChecker<Cfg, Responder, MonoResponder>::satisfies());
     registerVoiceEndCallback();
+
+    for (auto &c : heldMIDIKeyByChannel)
+        for (auto &k : c)
+            k = false;
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
@@ -590,6 +594,9 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                                                                      int16_t key, int32_t noteid,
                                                                      float velocity, float retune)
 {
+    if (channel >= 0 && channel < 16 && key >= 0 && key < 128)
+        heldMIDIKeyByChannel[channel][key] = true;
+
     if (repeatedKeyMode == RepeatedKeyMode::PIANO)
     {
         bool didAnyRetrigger{false};
@@ -923,6 +930,9 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                                                                       int16_t key, int32_t noteid,
                                                                       float velocity)
 {
+    if (channel >= 0 && channel < 16 && key >= 0 && key < 128)
+        heldMIDIKeyByChannel[channel][key] = false;
+
     std::unordered_set<uint64_t> retriggerGroups;
 
     VML("==== PROCESS NOTE OFF " << port << "/" << channel << "/" << key << "/" << noteid << " @ "
