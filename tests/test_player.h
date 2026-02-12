@@ -52,6 +52,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
     using pckn_t = std::tuple<int16_t, int16_t, int16_t, int32_t>;
     int32_t lastCreationCount{1};
     std::unordered_set<int32_t> terminatedVoiceSet;
+    bool terminateInstantly{true};
 
     struct Voice
     {
@@ -64,6 +65,8 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         int32_t creationCount{1};
         bool isGated{false};
         int32_t releaseCountdown{0};
+
+        bool slatedForTerminate{false};
 
         float velocity, releaseVelocity;
 
@@ -141,11 +144,18 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
 
         void terminateVoice(Voice *v)
         {
-            TPT("Terminate voice at " << TPD(testPlayer.pcknToString(v->pckn)));
-            testPlayer.voiceEndCallback(v);
-            if (v->voiceId != -1)
-                testPlayer.terminatedVoiceSet.insert(v->voiceId);
-            *v = Voice();
+            if (testPlayer.terminateInstantly)
+            {
+                TPT("Terminate voice at " << TPD(testPlayer.pcknToString(v->pckn)));
+                testPlayer.voiceEndCallback(v);
+                if (v->voiceId != -1)
+                    testPlayer.terminatedVoiceSet.insert(v->voiceId);
+                *v = Voice();
+            }
+            else
+            {
+                v->slatedForTerminate = true;
+            }
         }
         void releaseVoice(Voice *v, float velocity)
         {
