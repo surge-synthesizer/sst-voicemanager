@@ -55,6 +55,26 @@ TEST_CASE("Stealing Groups - global group")
     }
 }
 
+TEST_CASE("Delayed Termination")
+{
+    TestPlayer<32> tp;
+    tp.terminateInstantly = false;
+    auto &vm = tp.voiceManager;
+    vm.setPolyphonyGroupVoiceLimit(0, 4);
+
+    REQUIRE_NO_VOICES;
+
+    for (auto i = 0; i < 10; ++i)
+    {
+        vm.processNoteOnEvent(0, 0, 50 + i, -1, 0.8, 0.0);
+    }
+
+    // So voices are delayed terminated so
+    REQUIRE_VOICE_COUNTS(10, 10);
+    // But some are slated to die
+    REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.slatedForTerminate; }) == 6);
+}
+
 TEST_CASE("Stealing Groups - two groups single voice")
 {
     INFO("In a 32 voice manager, make two groups with size 4 and 6");

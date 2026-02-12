@@ -73,6 +73,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
 
         uint64_t polyGroup{0};
 
+        bool alreadyStole{false};
         typename Cfg::voice_t *activeVoiceCookie{nullptr};
 
         bool matches(int16_t pt, int16_t ch, int16_t k, int32_t nid)
@@ -126,9 +127,12 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             if constexpr (vmLog)
             {
                 VML("   - NIDSTack pos is now " << noteIdStackPos);
-                for (auto i = 0U; i < noteIdStackPos; ++i)
+                if (noteIdStackPos > 0 && noteIdStackPos < noteIdStack.size())
                 {
-                    VML("      - " << i << " -> " << noteIdStack[i]);
+                    for (auto i = 0U; i < noteIdStackPos; ++i)
+                    {
+                        VML("      - " << i << " -> " << noteIdStack[i]);
+                    }
                 }
             }
         }
@@ -242,12 +246,14 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             const auto &v = voiceInfo[vi];
             if (!v.activeVoiceCookie)
             {
-                VML("   - Skipping no-cookie at " << vi);
                 continue;
             }
             if (v.polyGroup != polygroup && !ignorePolygroup)
             {
-                VML("   - Skipping different group at " << vi);
+                continue;
+            }
+            if (v.alreadyStole)
+            {
                 continue;
             }
 
@@ -325,13 +331,17 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         }
         if (oldestNonGated >= 0)
         {
+            VML("  - Found (ONG) " << oldestGated);
+            voiceInfo[oldestNonGated].alreadyStole = true;
             return oldestNonGated;
         }
         if (oldestGated >= 0)
         {
-            VML("  - Found " << oldestGated);
+            VML("  - Found (OG) " << oldestGated);
+            voiceInfo[oldestGated].alreadyStole = true;
             return oldestGated;
         }
+        VML("   - FOUND NO STEALABLE VOICES");
         return -1;
     }
 
@@ -464,6 +474,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
                     vi.channel = dch;
                     vi.key = dk;
                     vi.noteId = dnid;
+                    vi.alreadyStole = false;
                     vi.snapOriginalToCurrent();
 
                     vi.gated = true;
@@ -634,6 +645,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
 
                 vi.noteId = noteid;
                 vi.voiceId = noteid;
+                vi.alreadyStole = false;
 
                 if (hadNoteId && hasNoteId)
                 {
@@ -888,6 +900,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                 vi.noteIdStackPos = 1;
                 vi.noteIdStack[0] = noteid;
                 vi.voiceId = noteid;
+                vi.alreadyStole = false;
 
                 VML("- New Voice assigned from "
                     << index << " with " << details.mostRecentVoiceCounter << " at pckn=" << port
