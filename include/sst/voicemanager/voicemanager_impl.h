@@ -21,6 +21,7 @@
 #include "voicemanager_constraints.h"
 
 #include <iostream>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -345,7 +346,10 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         return -1;
     }
 
-    void doMonoRetrigger(int16_t port, uint64_t polyGroup)
+    using continuationData_t = typename VoiceInitInstructionsEntry<Cfg>::continuationData_t;
+
+    void doMonoRetrigger(int16_t port, uint64_t polyGroup,
+                         std::optional<continuationData_t> contData = std::nullopt)
     {
         VML("=== MONO mode voice retrigger or move for " << polyGroup);
         auto &ks = keyStateByPort[port];
@@ -455,6 +459,11 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
                 {
                     voiceInitInstructionsBuffer[i].instruction =
                         VoiceInitInstructionsEntry<Cfg>::Instruction::SKIP;
+                }
+                else if (contData.has_value())
+                {
+                    voiceInitInstructionsBuffer[i].continuationData = *contData;
+                    voiceInitInstructionsBuffer[i].fromPlayingVoice = true;
                 }
             }
             auto voicesLeft = vm.responder.initializeMultipleVoices(
@@ -817,6 +826,24 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                 if (v.activeVoiceCookie && v.polyGroup == mpg)
                 {
                     VML("- Stealing voice " << v.key);
+                    // Populate continuation data on the matching instruction entry
+                    for (int i = 0; i < voicesToBeLaunched; ++i)
+                    {
+                        if (details.voiceBeginWorkingBuffer[i].polyphonyGroup == mpg)
+                        {
+                            if constexpr (HasVoiceContinuationData<Cfg>)
+                            {
+                                details.voiceInitInstructionsBuffer[i].continuationData =
+                                    responder.getContinuationData(v.activeVoiceCookie);
+                            }
+                            else
+                            {
+                                details.voiceInitInstructionsBuffer[i].continuationData = v.key;
+                            }
+                            details.voiceInitInstructionsBuffer[i].fromPlayingVoice = true;
+                            break;
+                        }
+                    }
                     responder.terminateVoice(v.activeVoiceCookie);
                 }
             }
@@ -946,7 +973,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
     if (channel >= 0 && channel < 16 && key >= 0 && key < 128)
         heldMIDIKeyByChannel[channel][key] = false;
 
-    std::unordered_set<uint64_t> retriggerGroups;
+    std::unordered_map<uint64_t, std::optional<typename Details::continuationData_t>>
+        retriggerGroups;
 
     VML("==== PROCESS NOTE OFF " << port << "/" << channel << "/" << key << "/" << noteid << " @ "
                                  << velocity);
@@ -967,7 +995,11 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                         << static_cast<int>(key) << " is " << anyOtherOption);
                     if (anyOtherOption)
                     {
-                        retriggerGroups.insert(vi.polyGroup);
+                        if constexpr (HasVoiceContinuationData<Cfg>)
+                            retriggerGroups[vi.polyGroup] =
+                                responder.getContinuationData(vi.activeVoiceCookie);
+                        else
+                            retriggerGroups[vi.polyGroup] = std::nullopt;
                         VML("- A key is down in same group. Initiating mono legato move");
                         continue;
                     }
@@ -997,7 +1029,11 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                     if (details.anyKeyHeldFor(port, vi.polyGroup, channel, key))
                     {
                         VML("- There's a gated key away so untrigger this");
-                        retriggerGroups.insert(vi.polyGroup);
+                        if constexpr (HasVoiceContinuationData<Cfg>)
+                            retriggerGroups[vi.polyGroup] =
+                                responder.getContinuationData(vi.activeVoiceCookie);
+                        else
+                            retriggerGroups[vi.polyGroup] = std::nullopt;
                         responder.terminateVoice(vi.activeVoiceCookie);
                         VML("- Gated to False ***");
                         vi.gated = false;
@@ -1017,8 +1053,12 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                         {
                             VML("- Hard Terminate voice with other away " << vi.polyGroup << " "
                                                                           << vi.activeVoiceCookie);
+                            if constexpr (HasVoiceContinuationData<Cfg>)
+                                retriggerGroups[vi.polyGroup] =
+                                    responder.getContinuationData(vi.activeVoiceCookie);
+                            else
+                                retriggerGroups[vi.polyGroup] = std::nullopt;
                             responder.terminateVoice(vi.activeVoiceCookie);
-                            retriggerGroups.insert(vi.polyGroup);
                         }
                         else
                         {
@@ -1069,10 +1109,10 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
 
     details.debugDumpKeyState(port);
 
-    for (const auto &rtg : retriggerGroups)
+    for (const auto &[rtg, contData] : retriggerGroups)
     {
         VML("- Retriggering mono group " << rtg);
-        details.doMonoRetrigger(port, rtg);
+        details.doMonoRetrigger(port, rtg, contData);
         if (noteid >= 0)
         {
             for (auto &vi : details.voiceInfo)
