@@ -36,6 +36,13 @@ namespace sst::voicemanager
 {
 
 /**
+ * HasVoiceContinuationData is a concept which checks if the Cfg type has a
+ * continuationData_t typedef
+ */
+template <typename Cfg>
+concept HasVoiceContinuationData = requires { typename Cfg::continuationData_t; };
+
+/**
  * VoiceInitBufferEntry is the object which the responder needs to populate
  * in the voice initiation creation lifecycle.
  *
@@ -52,9 +59,26 @@ template <typename Cfg> struct VoiceInitBufferEntry
     using buffer_t = std::array<VoiceInitBufferEntry<Cfg>, Cfg::maxVoiceCount>;
 };
 
+namespace detail
+{
+template <typename Cfg, bool hasCont> struct ContinuationDataType
+{
+    using type = int;
+};
+template <typename Cfg> struct ContinuationDataType<Cfg, true>
+{
+    using type = typename Cfg::continuationData_t;
+};
+} // namespace detail
+
 /**
  * VoiceInitInstructionsEntry is how the voice manager gives instructions to the synth
  * to start or restart a voice.
+ *
+ * @tparam Cfg the voice manager configuration trait
+ * @tparam Responder optional responder type; if Cfg and Responder satisfy
+ *         HasVoiceContinuationData, the entry carries a continuationData_t member,
+ *         otherwise it carries an int.
  */
 template <typename Cfg> struct VoiceInitInstructionsEntry
 {
@@ -63,6 +87,12 @@ template <typename Cfg> struct VoiceInitInstructionsEntry
         START, ///< Start a new voice at this entry
         SKIP,  ///< Skip this voice altogether. The voice manager has discarded it
     } instruction{Instruction::START};
+
+    bool fromPlayingVoice{false};
+    static constexpr bool hasContinuationData = HasVoiceContinuationData<Cfg>;
+    using continuationData_t =
+        typename detail::ContinuationDataType<Cfg, hasContinuationData>::type;
+    continuationData_t continuationData{};
 
     using buffer_t = std::array<VoiceInitInstructionsEntry<Cfg>, Cfg::maxVoiceCount>;
 };
