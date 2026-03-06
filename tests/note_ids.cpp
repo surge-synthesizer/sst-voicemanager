@@ -272,11 +272,9 @@ TEST_CASE("Note ID On Off works in Mono Modes")
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
     typedef TestPlayer<32, false>::Voice vc_t;
 
-    for (auto mode : {(uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO,
-                      (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO})
+    for (auto mode : {vm_t::MonoBehavior::MONO_LEGATO, vm_t::MonoBehavior::MONO_RETRIGGER})
     {
-        auto modestr =
-            (mode == (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO) ? "legato" : "mono";
+        auto modestr = (mode == vm_t::MonoBehavior::MONO_LEGATO) ? "legato" : "mono";
         DYNAMIC_SECTION("Note ID for Single Note works " << modestr)
         {
             auto tp = player_t();
@@ -416,8 +414,7 @@ TEST_CASE("That Six Sines VST3 Case")
             auto tp = player_t();
             vm_t &vm = tp.voiceManager;
 
-            vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                           (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+            vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
 
             vm.processNoteOnEvent(0, 1, 69, useNoteId ? 69 : -1, 0.8, 0.0);
             REQUIRE_VOICE_COUNTS(1, 1);

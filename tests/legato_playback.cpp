@@ -24,8 +24,7 @@ TEST_CASE("Legato Mono Mode - Single Key Releases")
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
     auto &vm = tp.voiceManager;
 
-    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
 
     REQUIRE_NO_VOICES;
 
@@ -43,8 +42,7 @@ TEST_CASE("Legato Mono Mode - Simplest Move")
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
     auto &vm = tp.voiceManager;
 
-    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
 
     REQUIRE_NO_VOICES;
 
@@ -65,8 +63,7 @@ TEST_CASE("Legato Mono Mode - Release while Gated")
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
     auto &vm = tp.voiceManager;
 
-    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
 
     REQUIRE_NO_VOICES;
 
@@ -117,8 +114,7 @@ TEST_CASE("Legato Mono Mode - Multi-voice simple")
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
     auto &vm = tp.voiceManager;
 
-    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
 
     REQUIRE_NO_VOICES;
     vm.processNoteOnEvent(0, 0, 90, -1, 0.9, 0);
@@ -155,8 +151,7 @@ TEST_CASE("Legato Mono Mode - Simple Release Moves Back")
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
     auto &vm = tp.voiceManager;
 
-    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
 
     REQUIRE_NO_VOICES;
 
@@ -203,9 +198,8 @@ TEST_CASE("Legato Mono Mode - Low Release Pri")
     auto &vm = tp.voiceManager;
 
     REQUIRE_NO_VOICES;
-    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                   (uint64_t)vm_t::MonoPlayModeFeatures::MONO_LEGATO |
-                       (uint64_t)vm_t::MonoPlayModeFeatures::ON_RELEASE_TO_LOWEST);
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO,
+                   vm_t::OnReleaseTo::LOWEST);
 
     INFO("Play notes in order, 58, 60, 62");
 
@@ -267,9 +261,8 @@ TEST_CASE("Legato Mono Mode - High Release Pri")
     auto &vm = tp.voiceManager;
 
     REQUIRE_NO_VOICES;
-    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                   (uint64_t)vm_t::MonoPlayModeFeatures::MONO_LEGATO |
-                       (uint64_t)vm_t::MonoPlayModeFeatures::ON_RELEASE_TO_HIGHEST);
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO,
+                   vm_t::OnReleaseTo::HIGHEST);
 
     INFO("Play notes in order, 62, 60, 58");
 
@@ -330,8 +323,7 @@ TEST_CASE("Legato Mono Mode - Retrigger during Release")
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
     auto &vm = tp.voiceManager;
 
-    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
 
     REQUIRE_NO_VOICES;
 
@@ -393,10 +385,8 @@ TEST_CASE("Legato Mono Mode - Mixed Group Poly/Mono/Legato")
     auto &vm = tp.voiceManager;
 
     vm.setPlaymode(2112, vm_t::PlayMode::POLY_VOICES);
-    vm.setPlaymode(90125, vm_t::PlayMode::MONO_NOTES,
-                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO);
-    vm.setPlaymode(8675309, vm_t::PlayMode::MONO_NOTES,
-                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+    vm.setPlaymode(90125, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
+    vm.setPlaymode(8675309, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
 
     REQUIRE_NO_VOICES;
 
@@ -438,8 +428,8 @@ TEST_CASE("Legato Mono Mode - Mixed with Mono Mode across Release")
             auto &vm = tp.voiceManager;
             ;
 
-            auto modea = (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO;
-            auto modeb = (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO;
+            auto modea = vm_t::MonoBehavior::MONO_LEGATO;
+            auto modeb = vm_t::MonoBehavior::MONO_RETRIGGER;
             if (cs == 1)
                 modeb = modea;
             if (cs == 2)
@@ -484,8 +474,7 @@ TEST_CASE("Legato Mode Sustain Pedal")
         using vm_t = TestPlayer<32>::voiceManager_t;
         auto &vm = tp.voiceManager;
 
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                       (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
 
         REQUIRE_NO_VOICES;
 
@@ -516,8 +505,7 @@ TEST_CASE("Legato Mode Sustain Pedal")
         auto &vm = tp.voiceManager;
         REQUIRE_NO_VOICES;
 
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                       (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
 
         vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
         REQUIRE_VOICE_COUNTS(1, 1);
@@ -551,8 +539,7 @@ TEST_CASE("Legato Mode Sustain Pedal")
         auto &vm = tp.voiceManager;
         using vm_t = TestPlayer<32>::voiceManager_t;
 
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                       (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
 
         REQUIRE_NO_VOICES;
 

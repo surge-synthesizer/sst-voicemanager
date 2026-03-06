@@ -158,8 +158,7 @@ TEST_CASE("Voice ID in Legato Mode")
     {
         auto tp = player_t();
         vm_t &vm = tp.voiceManager;
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                       static_cast<uint64_t>(vm_t::MonoPlayModeFeatures::NATURAL_LEGATO));
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
         REQUIRE(vm.getVoiceCount() == 0);
 
         tp.terminatedVoiceSet.clear();
@@ -179,8 +178,7 @@ TEST_CASE("Voice ID in Legato Mode")
     {
         auto tp = player_t();
         vm_t &vm = tp.voiceManager;
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                       static_cast<uint64_t>(vm_t::MonoPlayModeFeatures::NATURAL_LEGATO));
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
         REQUIRE(vm.getVoiceCount() == 0);
 
         tp.terminatedVoiceSet.clear();
@@ -221,8 +219,7 @@ TEST_CASE("Voice ID in Legato Mode")
     {
         auto tp = player_t();
         vm_t &vm = tp.voiceManager;
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                       static_cast<uint64_t>(vm_t::MonoPlayModeFeatures::NATURAL_LEGATO));
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_LEGATO);
         REQUIRE(vm.getVoiceCount() == 0);
 
         vm.processNoteOnEvent(0, 0, 60, 742, 0.0, 0);
@@ -284,8 +281,7 @@ TEST_CASE("Voice ID in Mono Mode")
     {
         auto tp = player_t();
         vm_t &vm = tp.voiceManager;
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                       static_cast<uint64_t>(vm_t::MonoPlayModeFeatures::NATURAL_MONO));
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
         REQUIRE(vm.getVoiceCount() == 0);
 
         tp.terminatedVoiceSet.clear();
@@ -305,8 +301,7 @@ TEST_CASE("Voice ID in Mono Mode")
     {
         auto tp = player_t();
         vm_t &vm = tp.voiceManager;
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                       static_cast<uint64_t>(vm_t::MonoPlayModeFeatures::NATURAL_MONO));
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
         REQUIRE(vm.getVoiceCount() == 0);
 
         tp.terminatedVoiceSet.clear();
@@ -348,8 +343,7 @@ TEST_CASE("Voice ID in Mono Mode")
     {
         auto tp = player_t();
         vm_t &vm = tp.voiceManager;
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
-                       static_cast<uint64_t>(vm_t::MonoPlayModeFeatures::NATURAL_MONO));
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
         REQUIRE(vm.getVoiceCount() == 0);
 
         vm.processNoteOnEvent(0, 0, 60, 742, 0.0, 0);

@@ -168,18 +168,17 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
      * possible to be active simultaneously. As well as distinct bit values, we provide a few
      * preset | combinations of flags for common use cases.
      */
-    enum struct MonoPlayModeFeatures : uint64_t
+    enum struct MonoBehavior
     {
-        NONE = 0,
-        MONO_RETRIGGER = 1 << 0, ///< A new keypress triggers a new voice
-        MONO_LEGATO = 1 << 1,    ///< A new keypress moves the playing voice
+        MONO_RETRIGGER, ///< A new keypress triggers a new voice
+        MONO_LEGATO,    ///< A new keypress moves the playing voice
+    };
 
-        ON_RELEASE_TO_LATEST = 1 << 2,  ///< mono release return to latest
-        ON_RELEASE_TO_HIGHEST = 1 << 3, ///< release to highest
-        ON_RELEASE_TO_LOWEST = 1 << 4,  ///< release to lowest
-
-        NATURAL_MONO = MONO_RETRIGGER | ON_RELEASE_TO_LATEST, ///< What a 'mono' button would do
-        NATURAL_LEGATO = MONO_LEGATO | ON_RELEASE_TO_LATEST,  ///< What a 'legato' button would do
+    enum struct OnReleaseTo
+    {
+        LATEST,  ///< mono release return to latest
+        HIGHEST, ///< release to highest
+        LOWEST,  ///< release to lowest
     };
 
     /**
@@ -233,8 +232,8 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
 
     void guaranteeGroup(uint64_t groupId);
     void setPolyphonyGroupVoiceLimit(uint64_t groupId, int32_t limit);
-    void setPlaymode(uint64_t groupId, PlayMode pm,
-                     uint64_t features = static_cast<uint64_t>(MonoPlayModeFeatures::NONE));
+    void setPlaymode(uint64_t groupId, PlayMode pm, MonoBehavior mb,
+                     OnReleaseTo ort = OnReleaseTo::LATEST);
     void setStealingPriorityMode(uint64_t groupId, StealingPriorityMode pm);
 
     std::array<std::array<bool, 16>, 128> heldMIDIKeyByChannel;
