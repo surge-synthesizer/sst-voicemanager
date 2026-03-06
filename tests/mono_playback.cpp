@@ -193,7 +193,7 @@ TEST_CASE("Mono Mode - Lowest Prio")
 
     REQUIRE_NO_VOICES;
     vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER,
-                   OnReleaseTo::LOWEST);
+                   vm_t::OnReleaseTo::LOWEST);
 
     INFO("Play notes in order, 60, 58, 62");
 
@@ -239,8 +239,8 @@ TEST_CASE("Mono Mode - Two Layers (Duophonic)")
 
     INFO("Put EVEN and ODD keys in different monophonic groups");
     tp.polyGroupForKey = [](auto k) { return (k % 2 == 0 ? 1477 : 1832); };
-    vm.setPlaymode(1477, vm_t::PlayMode::MONO_NOTES, MonoBehavior::MONO_RETRIGGER);
-    vm.setPlaymode(1832, vm_t::PlayMode::MONO_NOTES, MonoBehavior::MONO_RETRIGGER);
+    vm.setPlaymode(1477, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
+    vm.setPlaymode(1832, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
 
     REQUIRE_NO_VOICES;
     vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
@@ -295,7 +295,7 @@ TEST_CASE("Mono Mode - Sustain Pedal")
         using vm_t = TestPlayer<32>::voiceManager_t;
         auto &vm = tp.voiceManager;
 
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, MonoBehavior::MONO_RETRIGGER);
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
 
         REQUIRE_NO_VOICES;
 
@@ -324,7 +324,7 @@ TEST_CASE("Mono Mode - Sustain Pedal")
         typedef TestPlayer<32, false>::voiceManager_t vm_t;
         auto &vm = tp.voiceManager;
 
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, MonoBehavior::MONO_RETRIGGER);
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
         REQUIRE_NO_VOICES;
 
         vm.updateSustainPedal(0, 0, 127);
@@ -359,7 +359,7 @@ TEST_CASE("Mono Mode - Sustain Pedal")
         typedef TestPlayer<32, false>::voiceManager_t vm_t;
         auto &vm = tp.voiceManager;
 
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, MonoBehavior::MONO_RETRIGGER);
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
         REQUIRE_NO_VOICES;
 
         vm.updateSustainPedal(0, 0, 127);
@@ -403,7 +403,7 @@ TEST_CASE("Mono Mode - Two Layers, One Poly")
         INFO("Put EVEN and ODD keys in different groups, even poly odd mono");
         tp.polyGroupForKey = [](auto k) { return (k % 2 == 0 ? 19884 : 8675309); };
         vm.setPlaymode(19884, vm_t::PlayMode::POLY_VOICES);
-        vm.setPlaymode(8675309, vm_t::PlayMode::MONO_NOTES, MonoBehavior::MONO_RETRIGGER);
+        vm.setPlaymode(8675309, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
 
         INFO("Play three poly voices");
         for (int k = 60; k < 65; k += 2)
@@ -453,7 +453,7 @@ TEST_CASE("Mono Mode - Two Layers, One Poly")
         auto &vm = tp.voiceManager;
 
         vm.setPlaymode(2112, vm_t::PlayMode::POLY_VOICES);
-        vm.setPlaymode(90125, vm_t::PlayMode::MONO_NOTES, MonoBehavior::MONO_RETRIGGER);
+        vm.setPlaymode(90125, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
 
         INFO("Play three poly voices overlapped with one mono");
         for (int k = 60; k < 65; k += 2)
@@ -479,7 +479,7 @@ TEST_CASE("Mono Mode - Two Layers, One Poly")
         typedef TwoGroupsEveryKey<32>::voiceManager_t vm_t;
         auto &vm = tp.voiceManager;
         vm.setPlaymode(2112, vm_t::PlayMode::POLY_VOICES);
-        vm.setPlaymode(90125, vm_t::PlayMode::MONO_NOTES, MonoBehavior::MONO_RETRIGGER);
+        vm.setPlaymode(90125, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
 
         INFO("Now do it again but retrigger during release");
         for (int k = 60; k < 65; k += 2)
@@ -521,7 +521,7 @@ TEST_CASE("Mono terminates a non-gated release voice")
         typedef TestPlayer<32, false>::voiceManager_t vm_t;
         auto &vm = tp.voiceManager;
 
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, MonoBehavior::MONO_RETRIGGER);
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
 
         REQUIRE_NO_VOICES;
 
@@ -547,7 +547,7 @@ TEST_CASE("Mono terminates a non-gated release voice")
         typedef TestPlayer<32, false>::voiceManager_t vm_t;
         auto &vm = tp.voiceManager;
 
-        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, MonoBehavior::MONO_RETRIGGER);
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
 
         REQUIRE_NO_VOICES;
 
@@ -575,7 +575,7 @@ TEST_CASE("Mono Mode - Poly and Mono on same key with multi-voice start")
     typedef TwoGroupsEveryKey<32>::voiceManager_t vm_t;
     auto &vm = tp.voiceManager;
 
-    vm.setPlaymode(2112, vm_t::PlayMode::MONO_NOTES, MonoBehavior::MONO_RETRIGGER);
+    vm.setPlaymode(2112, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
 
     REQUIRE_NO_VOICES;
     vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.);
@@ -601,7 +601,7 @@ TEST_CASE("Mono Mode - Layerd Retrigger Miss")
     typedef TwoGroupsEveryKey<32>::voiceManager_t vm_t;
     auto &vm = tp.voiceManager;
 
-    vm.setPlaymode(2112, vm_t::PlayMode::MONO_NOTES, MonoBehavior::MONO_RETRIGGER);
+    vm.setPlaymode(2112, vm_t::PlayMode::MONO_NOTES, vm_t::MonoBehavior::MONO_RETRIGGER);
 
     vm.processNoteOnEvent(0, 0, 58, -1, 0.8, 0);
     tp.processFor(1);
