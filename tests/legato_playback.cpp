@@ -437,7 +437,7 @@ TEST_CASE("Legato Mono Mode - Mixed with Mono Mode across Release")
             if (cs == 3)
                 std::swap(modea, modeb);
 
-            INFO("Modes are " << modea << " " << modeb);
+            INFO("Modes are " << (int)modea << " " << (int)modeb);
             vm.setPlaymode(2112, vm_t::PlayMode::MONO_NOTES, modea);
             vm.setPlaymode(90125, vm_t::PlayMode::MONO_NOTES, modeb);
 
