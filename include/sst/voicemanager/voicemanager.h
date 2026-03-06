@@ -232,7 +232,7 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
 
     void guaranteeGroup(uint64_t groupId);
     void setPolyphonyGroupVoiceLimit(uint64_t groupId, int32_t limit);
-    void setPlaymode(uint64_t groupId, PlayMode pm, MonoBehavior mb,
+    void setPlaymode(uint64_t groupId, PlayMode pm, MonoBehavior mb = MonoBehavior::MONO_RETRIGGER,
                      OnReleaseTo ort = OnReleaseTo::LATEST);
     void setStealingPriorityMode(uint64_t groupId, StealingPriorityMode pm);
 
