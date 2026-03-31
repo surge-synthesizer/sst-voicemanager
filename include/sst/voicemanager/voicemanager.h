@@ -194,7 +194,7 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
     };
 
     int8_t mpeGlobalChannel{0};
-    int8_t mpeTimbreCC{74};
+    static constexpr int8_t mpeTimbreCC{74};
 
     Responder &responder;
     MonoResponder &monoResponder;
@@ -237,7 +237,7 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
                      uint64_t features = static_cast<uint64_t>(MonoPlayModeFeatures::NONE));
     void setStealingPriorityMode(uint64_t groupId, StealingPriorityMode pm);
 
-    std::array<std::array<bool, 16>, 128> heldMIDIKeyByChannel;
+    std::array<std::array<bool, 128>, 16> heldMIDIKeyByChannel;
 
   private:
     struct Details;

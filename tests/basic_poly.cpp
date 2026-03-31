@@ -498,3 +498,54 @@ TEST_CASE("VM Voice Count drops post release")
     tp.processFor(50);
     REQUIRE(vm.getVoiceCount() == 0);
 }
+
+TEST_CASE("HeldMIDIKeyByChannel Basic State")
+{
+    TestPlayer<32> tp;
+    auto &vm = tp.voiceManager;
+
+    // Initial state: no keys held
+    REQUIRE_FALSE(vm.heldMIDIKeyByChannel[0][60]);
+
+    // Press key 60 ch 0
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+    REQUIRE(vm.heldMIDIKeyByChannel[0][60]);
+    REQUIRE_FALSE(vm.heldMIDIKeyByChannel[0][61]);
+
+    // Press key 61 ch 1
+    vm.processNoteOnEvent(0, 1, 61, -1, 0.8, 0.0);
+    REQUIRE(vm.heldMIDIKeyByChannel[1][61]);
+    REQUIRE_FALSE(vm.heldMIDIKeyByChannel[0][61]); // different channel
+
+    // Release key 60 ch 0
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.4);
+    REQUIRE_FALSE(vm.heldMIDIKeyByChannel[0][60]);
+    REQUIRE(vm.heldMIDIKeyByChannel[1][61]); // still held on ch 1
+}
+
+TEST_CASE("HeldMIDIKeyByChannel Note Off Without Note On")
+{
+    TestPlayer<32> tp;
+    auto &vm = tp.voiceManager;
+
+    // Spurious note-off for a key that was never pressed — must not crash
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.4);
+
+    // State should remain false
+    REQUIRE_FALSE(vm.heldMIDIKeyByChannel[0][60]);
+}
+
+TEST_CASE("HeldMIDIKeyByChannel Double Note On")
+{
+    TestPlayer<32> tp;
+    auto &vm = tp.voiceManager;
+
+    // Press key 60 ch 0 twice without a note-off in between
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+    REQUIRE(vm.heldMIDIKeyByChannel[0][60]);
+
+    // One note-off should be enough to clear it
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.4);
+    REQUIRE_FALSE(vm.heldMIDIKeyByChannel[0][60]);
+}

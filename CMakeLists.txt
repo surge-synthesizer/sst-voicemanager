@@ -37,6 +37,7 @@ if (${bldtest})
             tests/note_ids.cpp
             tests/voice_ids.cpp
             tests/continuation_data.cpp
+            tests/multi_port.cpp
 
             libs/catch2/catch_amalgamated.cpp
         )

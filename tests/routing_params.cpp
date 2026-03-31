@@ -425,3 +425,54 @@ TEST_CASE("Routing Poly Parameter Modulations")
     REQUIRE(tp.activeVoiceCheck([](auto &v) { return v.noteid() == 20455; },
                                 [](auto &v) { return v.paramModulationCache.at(2) == -0.33; }));
 }
+
+TEST_CASE("Routing Mono Parameter Modulations")
+{
+    INFO("routeMonophonicParameterModulation delivers to all active voices regardless of "
+         "port/channel/key, and stores the value in monoParamModulationCache.");
+
+    auto tp = TestPlayer<32>();
+    auto &vm = tp.voiceManager;
+
+    REQUIRE_NO_VOICES;
+
+    // Start a voice on channel 0, key 55
+    vm.processNoteOnEvent(0, 0, 55, 10455, 0.5, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    tp.processFor(3);
+
+    // Start a voice on channel 1, key 60
+    vm.processNoteOnEvent(0, 1, 60, 10460, 0.5, 0);
+    REQUIRE_VOICE_COUNTS(2, 2);
+
+    // All voices start with empty monoParamModulationCache
+    REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.monoParamModulationCache.empty(); }) ==
+            2);
+
+    // Route a mono param modulation — it should reach ALL active voices
+    vm.routeMonophonicParameterModulation(0, 0, 55, 7, 0.42);
+    REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.monoParamModulationCache.empty(); }) ==
+            0);
+    REQUIRE(tp.activeVoiceCheck([](auto &v) { return v.key() == 55; },
+                                [](auto &v) { return v.monoParamModulationCache.at(7) == 0.42; }));
+    REQUIRE(tp.activeVoiceCheck([](auto &v) { return v.key() == 60; },
+                                [](auto &v) { return v.monoParamModulationCache.at(7) == 0.42; }));
+
+    // Route a second param ID — both voices should receive it
+    vm.routeMonophonicParameterModulation(0, 0, 55, 3, 0.99);
+    REQUIRE(tp.activeVoiceCheck([](auto &v) { return v.key() == 55; },
+                                [](auto &v) { return v.monoParamModulationCache.at(3) == 0.99; }));
+    REQUIRE(tp.activeVoiceCheck([](auto &v) { return v.key() == 60; },
+                                [](auto &v) { return v.monoParamModulationCache.at(3) == 0.99; }));
+
+    // Update param 7 with a new value — both voices should reflect it
+    vm.routeMonophonicParameterModulation(0, 0, 55, 7, -0.11);
+    REQUIRE(tp.activeVoicesMatching([](auto &v)
+                                    { return v.monoParamModulationCache.at(7) == -0.11; }) == 2);
+    // Param 3 must be unchanged
+    REQUIRE(tp.activeVoicesMatching([](auto &v)
+                                    { return v.monoParamModulationCache.at(3) == 0.99; }) == 2);
+
+    // Poly param modulation cache must remain untouched by mono routing
+    REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.paramModulationCache.empty(); }) == 2);
+}

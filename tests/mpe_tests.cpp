@@ -120,3 +120,64 @@ TEST_CASE("MPE After Release")
                             v.mpePressure == 14 && v.mpeTimbre == 55 && v.isGated);
                 }) == 1);
 }
+
+TEST_CASE("MPE Timbre CC Is Constant 74")
+{
+    using vm_t = TestPlayer<32, false>::voiceManager_t;
+    static_assert(vm_t::mpeTimbreCC == 74, "MPE timbre CC must be 74 per spec");
+
+    auto tp = TestPlayer<32, false>();
+    auto &vm = tp.voiceManager;
+    vm.dialect = vm_t::MIDI1Dialect::MIDI1_MPE;
+
+    vm.processNoteOnEvent(0, 1, 60, -1, 0.8, 0.0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+
+    vm.routeMIDI1CC(0, 1, 74, 42);
+    REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 60 && v.mpeTimbre == 42; }) ==
+            1);
+
+    // A non-timbre CC on an MPE channel must not affect mpeTimbre
+    vm.routeMIDI1CC(0, 1, 73, 99);
+    REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 60 && v.mpeTimbre == 42; }) ==
+            1);
+}
+
+TEST_CASE("MPE Global Channel Pitch Bend")
+{
+    INFO("Pitch bend on the MPE global channel (0) must route to the mono responder, "
+         "not set mpeBend on voices. Pitch bend on a member channel must set mpeBend "
+         "on the voice playing on that channel, not update the mono responder.");
+
+    using vm_t = TestPlayer<32, false>::voiceManager_t;
+    auto tp = TestPlayer<32, false>();
+    auto &vm = tp.voiceManager;
+    vm.dialect = vm_t::MIDI1Dialect::MIDI1_MPE;
+
+    // Confirm the default global channel is 0
+    REQUIRE(vm.mpeGlobalChannel == 0);
+
+    // Play a note on MPE member channel 1
+    vm.processNoteOnEvent(0, 1, 60, -1, 0.8, 0.0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+
+    // Verify initial state: voice mpeBend is 0, mono pitchBend on ch 0 is 0
+    REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 60 && v.mpeBend == 0; }) == 1);
+    REQUIRE(tp.pitchBend[0] == 0);
+
+    // Send pitch bend on global channel 0
+    // Expected: mono responder pitchBend[0] updated, voice mpeBend stays 0
+    vm.routeMIDIPitchBend(0, 0, 4000);
+
+    REQUIRE(tp.pitchBend[0] == 4000);
+    REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 60 && v.mpeBend == 0; }) == 1);
+
+    // Send pitch bend on member channel 1
+    // Expected: voice mpeBend updated, mono responder pitchBend[0] stays 4000
+    vm.routeMIDIPitchBend(0, 1, 9000);
+
+    REQUIRE(tp.activeVoicesMatching(
+                [](auto &v)
+                { return v.key() == 60 && v.channel() == 1 && v.mpeBend == 9000; }) == 1);
+    REQUIRE(tp.pitchBend[0] == 4000);
+}
