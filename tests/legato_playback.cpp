@@ -626,6 +626,120 @@ TEST_CASE("Legato Mode Sustain Pedal")
     }
 }
 
+TEST_CASE("Mono Legato Release To Highest")
+{
+    auto tp = TestPlayer<32, false>();
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+    auto &vm = tp.voiceManager;
+
+    REQUIRE_NO_VOICES;
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                   (uint64_t)vm_t::MonoPlayModeFeatures::MONO_LEGATO |
+                       (uint64_t)vm_t::MonoPlayModeFeatures::ON_RELEASE_TO_HIGHEST);
+
+    INFO("Press keys 60, 62, 65 — each triggers a legato move");
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+    tp.processFor(1);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+    REQUIRE_VOICE_MATCH(1, v.creationCount == 1);
+
+    vm.processNoteOnEvent(0, 0, 62, -1, 0.8, 0.0);
+    tp.processFor(1);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 62);
+    REQUIRE_VOICE_MATCH(1, v.originalKey() == 60);
+    REQUIRE_VOICE_MATCH(1, v.creationCount == 1);
+
+    vm.processNoteOnEvent(0, 0, 65, -1, 0.8, 0.0);
+    tp.processFor(1);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 65);
+    REQUIRE_VOICE_MATCH(1, v.originalKey() == 60);
+    REQUIRE_VOICE_MATCH(1, v.creationCount == 1);
+
+    INFO("Release 65 (the highest held) — voice should move to 62 (new highest)");
+    vm.processNoteOffEvent(0, 0, 65, -1, 0.0);
+    tp.processFor(1);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 62);
+    REQUIRE_VOICE_MATCH(1, v.originalKey() == 60);
+    REQUIRE_VOICE_MATCH(1, v.creationCount == 1);
+
+    INFO("Release 62 — voice should move to 60 (only remaining held key)");
+    vm.processNoteOffEvent(0, 0, 62, -1, 0.0);
+    tp.processFor(1);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+    REQUIRE_VOICE_MATCH(1, v.originalKey() == 60);
+    REQUIRE_VOICE_MATCH(1, v.creationCount == 1);
+
+    INFO("Release 60 — no more held keys, voice should begin releasing");
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.0);
+    REQUIRE_VOICE_COUNTS(1, 0);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+    REQUIRE_VOICE_MATCH(1, v.creationCount == 1);
+    tp.processFor(10);
+    REQUIRE_NO_VOICES;
+}
+
+TEST_CASE("Mono Legato Release To Lowest")
+{
+    auto tp = TestPlayer<32, false>();
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+    auto &vm = tp.voiceManager;
+
+    REQUIRE_NO_VOICES;
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                   (uint64_t)vm_t::MonoPlayModeFeatures::MONO_LEGATO |
+                       (uint64_t)vm_t::MonoPlayModeFeatures::ON_RELEASE_TO_LOWEST);
+
+    INFO("Press keys 60, 62, 65 — each triggers a legato move");
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+    tp.processFor(1);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+    REQUIRE_VOICE_MATCH(1, v.creationCount == 1);
+
+    vm.processNoteOnEvent(0, 0, 62, -1, 0.8, 0.0);
+    tp.processFor(1);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 62);
+    REQUIRE_VOICE_MATCH(1, v.originalKey() == 60);
+    REQUIRE_VOICE_MATCH(1, v.creationCount == 1);
+
+    vm.processNoteOnEvent(0, 0, 65, -1, 0.8, 0.0);
+    tp.processFor(1);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 65);
+    REQUIRE_VOICE_MATCH(1, v.originalKey() == 60);
+    REQUIRE_VOICE_MATCH(1, v.creationCount == 1);
+
+    INFO("Release 65 (the current key) — voice should move to 60 (lowest of remaining {60, 62})");
+    vm.processNoteOffEvent(0, 0, 65, -1, 0.0);
+    tp.processFor(1);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+    REQUIRE_VOICE_MATCH(1, v.originalKey() == 60);
+    REQUIRE_VOICE_MATCH(1, v.creationCount == 1);
+
+    INFO("Release 60 (the current key) — voice should move to 62 (only remaining held key)");
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.0);
+    tp.processFor(1);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 62);
+    REQUIRE_VOICE_MATCH(1, v.originalKey() == 60);
+    REQUIRE_VOICE_MATCH(1, v.creationCount == 1);
+
+    INFO("Release 62 — no more held keys, voice should begin releasing");
+    vm.processNoteOffEvent(0, 0, 62, -1, 0.0);
+    REQUIRE_VOICE_COUNTS(1, 0);
+    REQUIRE_VOICE_MATCH(1, v.key() == 62);
+    REQUIRE_VOICE_MATCH(1, v.creationCount == 1);
+    tp.processFor(10);
+    REQUIRE_NO_VOICES;
+}
+
 /*
 TEST_CASE("Legato Mono Mode - Multi-voice complex") { REQUIRE_INCOMPLETE_TEST; }
 TEST_CASE("Legato Mono Mode - Mixed Group Poly/Legato") { REQUIRE_INCOMPLETE_TEST; }

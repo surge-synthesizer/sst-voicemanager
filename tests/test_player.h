@@ -86,6 +86,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         // Note these make the voices non-fixed size so in a real synth you wouldn't want this
         std::map<int32_t, double> noteExpressionCache;
         std::map<int32_t, double> paramModulationCache;
+        std::map<int32_t, double> monoParamModulationCache;
 
         int16_t mpeBend{0};
         int8_t mpePressure{0}, mpeTimbre{0};
@@ -200,8 +201,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         void setVoiceMonophonicParameterModulation(Voice *v, uint32_t e, double val)
         {
             TPF;
-            // v->paramModulationCache[e] = val;
-            // TODO - test this
+            v->monoParamModulationCache[e] = val;
         }
         void setPolyphonicAftertouch(Voice *v, int8_t val)
         {

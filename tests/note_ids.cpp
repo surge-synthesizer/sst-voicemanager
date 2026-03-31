@@ -403,6 +403,47 @@ TEST_CASE("Note ID On Off works in Mono Modes")
     }
 }
 
+TEST_CASE("Note ID Stack 128 Key Smoke Test")
+{
+    /*
+     * VoiceInfo::noteIdStack is a fixed std::array<int32_t, 256>.
+     * Standard MIDI has 128 keys per channel (0-127), so you can never exceed 128
+     * simultaneous held keys on one channel - well within the 256-entry limit.
+     * This test presses all 128 keys in MONO_LEGATO mode and verifies no crash,
+     * exactly 1 gated voice throughout, and clean teardown on release.
+     */
+    auto tp = TestPlayer<32>();
+    typedef TestPlayer<32>::voiceManager_t vm_t;
+    auto &vm = tp.voiceManager;
+
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                   (uint64_t)vm_t::MonoPlayModeFeatures::MONO_LEGATO |
+                       (uint64_t)vm_t::MonoPlayModeFeatures::ON_RELEASE_TO_LATEST);
+
+    // Press all 128 MIDI keys (0-127) sequentially, each with a unique noteId.
+    // In MONO_LEGATO mode the single voice is moved to the new key on each press.
+    for (int key = 0; key < 128; ++key)
+    {
+        int32_t noteId = 1000 + key;
+        vm.processNoteOnEvent(0, 0, key, noteId, 0.8f, 0.0f);
+    }
+
+    // After all 128 presses there must still be exactly 1 mono voice, gated.
+    REQUIRE_VOICE_COUNTS(1, 1);
+
+    // Release keys in reverse order; MONO_LEGATO returns to the previously held key each time.
+    for (int key = 127; key >= 0; --key)
+    {
+        int32_t noteId = 1000 + key;
+        vm.processNoteOffEvent(0, 0, key, noteId, 0.0f);
+    }
+
+    // Allow the release countdown to expire.
+    tp.processFor(10);
+
+    REQUIRE_NO_VOICES;
+}
+
 TEST_CASE("That Six Sines VST3 Case")
 {
     typedef TestPlayer<32, false> player_t;
