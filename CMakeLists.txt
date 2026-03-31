@@ -31,6 +31,7 @@ if (${bldtest})
             tests/stealing_groups.cpp
             tests/stealing_maxvoice.cpp
             tests/stealing_priorities.cpp
+            tests/priority_mono.cpp
             tests/legato_playback.cpp
             tests/piano_mode.cpp
             tests/midi1_to_vm.cpp
