@@ -142,6 +142,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
     std::unordered_map<uint64_t, int32_t> polyLimits{};
     std::unordered_map<uint64_t, int32_t> usedVoices{};
     std::unordered_map<uint64_t, StealingPriorityMode> stealingPriorityMode{};
+    std::unordered_map<uint64_t, MonoPriorityMode> monoPriorityMode{};
     std::unordered_map<uint64_t, PlayMode> playMode{};
     std::unordered_map<uint64_t, uint64_t> playModeFeatures{};
     int32_t totalUsedVoices{0};
@@ -164,6 +165,8 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             usedVoices[groupId] = 0;
         if (stealingPriorityMode.find(groupId) == stealingPriorityMode.end())
             stealingPriorityMode[groupId] = StealingPriorityMode::OLDEST;
+        if (monoPriorityMode.find(groupId) == monoPriorityMode.end())
+            monoPriorityMode[groupId] = MonoPriorityMode::LATEST;
         if (playMode.find(groupId) == playMode.end())
             playMode[groupId] = PlayMode::POLY_VOICES;
         if (playModeFeatures.find(groupId) == playModeFeatures.end())
@@ -782,27 +785,41 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                 {
                     VML("  - Moving existing voice " << &v << " " << v.activeVoiceCookie << " to "
                                                      << key << " (" << v.gated << ")");
-                    if (v.gated)
+
+                    // Check if the new note wins under the mono priority mode.
+                    // LATEST always wins (default). HIGHEST only wins if the new key is
+                    // higher than the currently playing key; LOWEST only wins if lower.
+                    auto mpm = details.monoPriorityMode.at(mpg);
+                    bool newNoteWins = true;
+                    if (mpm == MonoPriorityMode::HIGHEST)
+                        newNoteWins = (key > v.key);
+                    else if (mpm == MonoPriorityMode::LOWEST)
+                        newNoteWins = (key < v.key);
+
+                    if (newNoteWins)
                     {
-                        responder.moveVoice(v.activeVoiceCookie, port, channel, key, velocity);
-                    }
-                    else
-                    {
-                        responder.moveAndRetriggerVoice(v.activeVoiceCookie, port, channel, key,
-                                                        velocity);
+                        if (v.gated)
+                        {
+                            responder.moveVoice(v.activeVoiceCookie, port, channel, key, velocity);
+                        }
+                        else
+                        {
+                            responder.moveAndRetriggerVoice(v.activeVoiceCookie, port, channel, key,
+                                                            velocity);
+                        }
+
+                        v.noteIdStack[v.noteIdStackPos] = noteid;
+                        v.noteIdStackPos =
+                            (v.noteIdStackPos + 1) & (Details::VoiceInfo::noteIdStackSize - 1);
+                        v.noteId = noteid;
+                        v.port = port;
+                        v.channel = channel;
+                        v.key = key;
+                        v.gated = true;
                     }
 
-                    v.noteIdStack[v.noteIdStackPos] = noteid;
-                    v.noteIdStackPos =
-                        (v.noteIdStackPos + 1) & (Details::VoiceInfo::noteIdStackSize - 1);
-                    v.noteId = noteid;
-
+                    // Whether or not the voice moved, no new voice is created for this note.
                     responder.discardHostVoice(noteid);
-                    v.port = port;
-                    v.channel = channel;
-                    v.key = key;
-                    v.gated = true;
-
                     foundOne = true;
                 }
             }
@@ -821,31 +838,62 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         }
         else
         {
+            // Check stealing priority against the first active voice found (all mono voices
+            // for a group share the same key, so comparing once is sufficient).
+            bool checkedPriority{false};
+            bool newNoteWins{true};
             for (const auto &v : details.voiceInfo)
             {
                 if (v.activeVoiceCookie && v.polyGroup == mpg)
                 {
-                    VML("- Stealing voice " << v.key);
-                    // Populate continuation data on the matching instruction entry
-                    for (int i = 0; i < voicesToBeLaunched; ++i)
+                    if (!checkedPriority)
                     {
-                        if (details.voiceBeginWorkingBuffer[i].polyphonyGroup == mpg)
-                        {
-                            if constexpr (HasVoiceContinuationData<Cfg>)
-                            {
-                                details.voiceInitInstructionsBuffer[i].continuationData =
-                                    responder.getContinuationData(v.activeVoiceCookie);
-                            }
-                            else
-                            {
-                                details.voiceInitInstructionsBuffer[i].continuationData = v.key;
-                            }
-                            details.voiceInitInstructionsBuffer[i].fromPlayingVoice = true;
-                            break;
-                        }
+                        auto mpm = details.monoPriorityMode.at(mpg);
+                        if (mpm == MonoPriorityMode::HIGHEST)
+                            newNoteWins = (key > v.key);
+                        else if (mpm == MonoPriorityMode::LOWEST)
+                            newNoteWins = (key < v.key);
+                        checkedPriority = true;
                     }
-                    responder.terminateVoice(v.activeVoiceCookie);
+
+                    if (newNoteWins)
+                    {
+                        VML("- Stealing voice " << v.key);
+                        // Populate continuation data on the matching instruction entry
+                        for (int i = 0; i < voicesToBeLaunched; ++i)
+                        {
+                            if (details.voiceBeginWorkingBuffer[i].polyphonyGroup == mpg)
+                            {
+                                if constexpr (HasVoiceContinuationData<Cfg>)
+                                {
+                                    details.voiceInitInstructionsBuffer[i].continuationData =
+                                        responder.getContinuationData(v.activeVoiceCookie);
+                                }
+                                else
+                                {
+                                    details.voiceInitInstructionsBuffer[i].continuationData = v.key;
+                                }
+                                details.voiceInitInstructionsBuffer[i].fromPlayingVoice = true;
+                                break;
+                            }
+                        }
+                        responder.terminateVoice(v.activeVoiceCookie);
+                    }
                 }
+            }
+
+            if (checkedPriority && !newNoteWins)
+            {
+                // New note doesn't win — keep the existing voice and skip new voice creation.
+                for (int i = 0; i < voicesToBeLaunched; ++i)
+                {
+                    if (details.voiceBeginWorkingBuffer[i].polyphonyGroup == mpg)
+                    {
+                        details.voiceInitInstructionsBuffer[i].instruction =
+                            VoiceInitInstructionsEntry<Cfg>::Instruction::SKIP;
+                    }
+                }
+                responder.discardHostVoice(noteid);
             }
         }
     }
@@ -1394,6 +1442,14 @@ void VoiceManager<Cfg, Responder, MonoResponder>::setStealingPriorityMode(uint64
 {
     details.guaranteeGroup(groupId);
     details.stealingPriorityMode[groupId] = pm;
+}
+
+template <typename Cfg, typename Responder, typename MonoResponder>
+void VoiceManager<Cfg, Responder, MonoResponder>::setMonoPriorityMode(uint64_t groupId,
+                                                                      MonoPriorityMode pm)
+{
+    details.guaranteeGroup(groupId);
+    details.monoPriorityMode[groupId] = pm;
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>

@@ -193,6 +193,20 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
         LOWEST
     };
 
+    /**
+     * MonoPriorityMode determines which note "wins" in MONO_NOTES and MONO_LEGATO modes when a
+     * new note-on arrives while a voice is already playing.
+     * LATEST: the new note always takes over (default).
+     * HIGHEST: the new note only takes over if its key is strictly higher than the current voice.
+     * LOWEST:  the new note only takes over if its key is strictly lower than the current voice.
+     */
+    enum struct MonoPriorityMode
+    {
+        LATEST,
+        HIGHEST,
+        LOWEST
+    };
+
     int8_t mpeGlobalChannel{0};
     static constexpr int8_t mpeTimbreCC{74};
 
@@ -236,6 +250,7 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
     void setPlaymode(uint64_t groupId, PlayMode pm,
                      uint64_t features = static_cast<uint64_t>(MonoPlayModeFeatures::NONE));
     void setStealingPriorityMode(uint64_t groupId, StealingPriorityMode pm);
+    void setMonoPriorityMode(uint64_t groupId, MonoPriorityMode pm);
 
     std::array<std::array<bool, 128>, 16> heldMIDIKeyByChannel;
 
