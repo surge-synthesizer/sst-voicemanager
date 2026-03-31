@@ -239,6 +239,113 @@ TEST_CASE("Routing Note Expressions")
                                 [](auto &v) { return v.noteExpressionCache.at(2) == -0.33; }));
 }
 
+TEST_CASE("CC and Pitch Bend Replay on New Voice Creation")
+{
+    INFO("The voice manager caches the last CC and pitch-bend value per channel and replays "
+         "them to the monoResponder whenever a new voice is created, so a voice that starts "
+         "mid-performance receives the current controller state immediately.");
+
+    SECTION("Pitch Bend Is Replayed To New Voice")
+    {
+        auto tp = TestPlayer<32>();
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        // Send pitch bend with no voices playing; value is cached but also forwarded now.
+        vm.routeMIDIPitchBend(0, 0, 9500);
+        REQUIRE(tp.pitchBend[0] == 9500);
+
+        // Simulate state loss so the replay is distinguishable from the original send.
+        tp.pitchBend[0] = 0;
+        REQUIRE(tp.pitchBend[0] == 0);
+
+        // A new note-on must replay the cached bend to the monoResponder.
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8f, 0.f);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE(tp.pitchBend[0] == 9500);
+    }
+
+    SECTION("CC Is Replayed To New Voice")
+    {
+        auto tp = TestPlayer<32>();
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        vm.routeMIDI1CC(0, 0, 1, 100); // modwheel = 100
+        REQUIRE(tp.midi1CC[0][1] == 100);
+
+        tp.midi1CC[0][1] = 0;
+        REQUIRE(tp.midi1CC[0][1] == 0);
+
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8f, 0.f);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE(tp.midi1CC[0][1] == 100);
+    }
+
+    SECTION("Multiple CCs On Same Channel Are All Replayed")
+    {
+        auto tp = TestPlayer<32>();
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        vm.routeMIDI1CC(0, 0, 1, 80);  // mod wheel
+        vm.routeMIDI1CC(0, 0, 11, 64); // expression
+        vm.routeMIDI1CC(0, 0, 7, 100); // volume
+
+        tp.midi1CC[0][1] = 0;
+        tp.midi1CC[0][11] = 0;
+        tp.midi1CC[0][7] = 0;
+
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8f, 0.f);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE(tp.midi1CC[0][1] == 80);
+        REQUIRE(tp.midi1CC[0][11] == 64);
+        REQUIRE(tp.midi1CC[0][7] == 100);
+    }
+
+    SECTION("Replay Is Channel-Specific")
+    {
+        INFO("CC and PB sent on channel 0 must not be replayed to a voice created on channel 1");
+        auto tp = TestPlayer<32>();
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        vm.routeMIDI1CC(0, 0, 1, 99);      // channel 0 mod wheel
+        vm.routeMIDIPitchBend(0, 0, 9500); // channel 0 bend
+        tp.midi1CC[0][1] = 0;
+        tp.pitchBend[0] = 0;
+
+        // New voice on channel 1 — replay should fire on channel 0 only because
+        // the voice is on channel 1 and the cache is keyed by the note's channel.
+        vm.processNoteOnEvent(0, 1, 60, -1, 0.8f, 0.f);
+        REQUIRE_VOICE_COUNTS(1, 1);
+
+        // Channel 0 cache was not replayed (voice is on channel 1)
+        REQUIRE(tp.midi1CC[0][1] == 0);
+        REQUIRE(tp.pitchBend[0] == 0);
+
+        // Channel 1 has no cached values, so nothing changes there either
+        REQUIRE(tp.midi1CC[1][1] == 0);
+        REQUIRE(tp.pitchBend[1] == 0);
+    }
+
+    SECTION("Center Pitch Bend Is Not Replayed")
+    {
+        INFO("lastPBByChannel stores pb14bit-8192; if the result is 0 (center), no replay fires");
+        auto tp = TestPlayer<32>();
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        vm.routeMIDIPitchBend(0, 0, 9500);
+        vm.routeMIDIPitchBend(0, 0, 8192); // return to center
+        tp.pitchBend[0] = 9999;            // sentinel; should remain if no replay fires
+
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8f, 0.f);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE(tp.pitchBend[0] == 9999); // center bend triggers no replay
+    }
+}
+
 TEST_CASE("Routing Poly Parameter Modulations")
 {
     auto tp = TestPlayer<32>();

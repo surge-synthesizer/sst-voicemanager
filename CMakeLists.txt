@@ -36,6 +36,7 @@ if (${bldtest})
             tests/midi1_to_vm.cpp
             tests/note_ids.cpp
             tests/voice_ids.cpp
+            tests/continuation_data.cpp
 
             libs/catch2/catch_amalgamated.cpp
         )

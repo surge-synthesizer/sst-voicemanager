@@ -316,6 +316,85 @@ TEST_CASE("AllSoundsOff")
     REQUIRE_VOICE_COUNTS(0, 0);
 }
 
+TEST_CASE("AllSoundsOffMatching")
+{
+    SECTION("Predicate Matching None Leaves All Voices Intact")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        for (int i = 0; i < 5; ++i)
+            vm.processNoteOnEvent(0, 0, 60 + i, -1, 0.5, 0);
+
+        REQUIRE_VOICE_COUNTS(5, 5);
+
+        vm.allSoundsOffMatching([](auto *) { return false; });
+
+        REQUIRE_VOICE_COUNTS(5, 5);
+    }
+
+    SECTION("Predicate Matching Subset Terminates Only Matching Voices")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        // Start keys 60-64 (5 voices)
+        for (int i = 0; i < 5; ++i)
+            vm.processNoteOnEvent(0, 0, 60 + i, -1, 0.5, 0);
+
+        REQUIRE_VOICE_COUNTS(5, 5);
+
+        // Terminate even keys: 60, 62, 64
+        vm.allSoundsOffMatching([](auto *v) { return v->key() % 2 == 0; });
+
+        REQUIRE_VOICE_COUNTS(2, 2);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 61; }) == 1);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 63; }) == 1);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() % 2 == 0; }) == 0);
+    }
+
+    SECTION("Predicate Matching All Terminates Everything")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        for (int i = 0; i < 6; ++i)
+            vm.processNoteOnEvent(0, 0, 58 + i, -1, 0.5, 0);
+
+        REQUIRE_VOICE_COUNTS(6, 6);
+
+        vm.allSoundsOffMatching([](auto *) { return true; });
+
+        REQUIRE_NO_VOICES;
+    }
+
+    SECTION("Predicate Matching Releasing Voices Terminates Them Early")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.5, 0);
+        vm.processNoteOnEvent(0, 0, 62, -1, 0.5, 0);
+        vm.processNoteOnEvent(0, 0, 64, -1, 0.5, 0);
+        REQUIRE_VOICE_COUNTS(3, 3);
+
+        // Release 60 and 64 — they are now releasing but still consuming slots
+        vm.processNoteOffEvent(0, 0, 60, -1, 0.5);
+        vm.processNoteOffEvent(0, 0, 64, -1, 0.5);
+        REQUIRE_VOICE_COUNTS(3, 1);
+
+        // Terminate only the releasing voices (not gated)
+        vm.allSoundsOffMatching([](auto *v) { return !v->isGated; });
+
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 62; }) == 1);
+    }
+}
+
 TEST_CASE("Cross Channel Sustain Pedal")
 {
     SECTION("One Note, Sus Other Channel, MIDI1")
