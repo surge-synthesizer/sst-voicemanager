@@ -557,3 +557,111 @@ TEST_CASE("Mono Retrigger - Priority LATEST: any new note always retrigs (defaul
     REQUIRE_VOICE_COUNTS(1, 1);
     REQUIRE_VOICE_MATCH(1, v.key() == 70);
 }
+
+// ---------------------------------------------------------------------------
+// Repeated note (same key re-pressed while still alive) with HIGHEST / LOWEST
+//
+// Scenario: play C, release C (voice still releasing), play C again.
+// A repeated note is neither higher nor lower — it is equal — so it should
+// always win and retrigger the voice regardless of priority mode.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Mono Legato - HIGHEST: repeated note (same key) always wins")
+{
+    auto tp = TestPlayer<32, false>();
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+    auto &vm = tp.voiceManager;
+
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+    vm.setMonoPriorityMode(0, vm_t::MonoPriorityMode::HIGHEST);
+
+    // Press 60 — voice starts at 60
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+
+    // Release 60 — voice begins releasing (still alive)
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.8);
+    REQUIRE_VOICE_COUNTS(1, 0);
+
+    // Press 60 again while it is still releasing — equal key should always win
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+}
+
+TEST_CASE("Mono Legato - LOWEST: repeated note (same key) always wins")
+{
+    auto tp = TestPlayer<32, false>();
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+    auto &vm = tp.voiceManager;
+
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+    vm.setMonoPriorityMode(0, vm_t::MonoPriorityMode::LOWEST);
+
+    // Press 60 — voice starts at 60
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+
+    // Release 60 — voice begins releasing (still alive)
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.8);
+    REQUIRE_VOICE_COUNTS(1, 0);
+
+    // Press 60 again while it is still releasing — equal key should always win
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+}
+
+TEST_CASE("Mono Retrigger - HIGHEST: repeated note (same key) always wins")
+{
+    auto tp = TestPlayer<32, false>();
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+    auto &vm = tp.voiceManager;
+
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO);
+    vm.setMonoPriorityMode(0, vm_t::MonoPriorityMode::HIGHEST);
+
+    // Press 60 — voice starts at 60
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+
+    // Release 60 — voice begins releasing (still alive)
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.8);
+    REQUIRE_VOICE_COUNTS(1, 0);
+
+    // Press 60 again while it is still releasing — equal key should always win
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+}
+
+TEST_CASE("Mono Retrigger - LOWEST: repeated note (same key) always wins")
+{
+    auto tp = TestPlayer<32, false>();
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+    auto &vm = tp.voiceManager;
+
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO);
+    vm.setMonoPriorityMode(0, vm_t::MonoPriorityMode::LOWEST);
+
+    // Press 60 — voice starts at 60
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+
+    // Release 60 — voice begins releasing (still alive)
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.8);
+    REQUIRE_VOICE_COUNTS(1, 0);
+
+    // Press 60 again while it is still releasing — equal key should always win
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+}

@@ -792,9 +792,9 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                     auto mpm = details.monoPriorityMode.at(mpg);
                     bool newNoteWins = true;
                     if (mpm == MonoPriorityMode::HIGHEST)
-                        newNoteWins = (key > v.key);
+                        newNoteWins = (key >= v.key);
                     else if (mpm == MonoPriorityMode::LOWEST)
-                        newNoteWins = (key < v.key);
+                        newNoteWins = (key <= v.key);
 
                     if (newNoteWins)
                     {
@@ -850,9 +850,9 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                     {
                         auto mpm = details.monoPriorityMode.at(mpg);
                         if (mpm == MonoPriorityMode::HIGHEST)
-                            newNoteWins = (key > v.key);
+                            newNoteWins = (key >= v.key);
                         else if (mpm == MonoPriorityMode::LOWEST)
-                            newNoteWins = (key < v.key);
+                            newNoteWins = (key <= v.key);
                         checkedPriority = true;
                     }
 
