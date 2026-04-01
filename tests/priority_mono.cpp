@@ -559,6 +559,121 @@ TEST_CASE("Mono Retrigger - Priority LATEST: any new note always retrigs (defaul
 }
 
 // ---------------------------------------------------------------------------
+// Releasing (ungated) voice does not block new notes in HIGHEST / LOWEST mode.
+//
+// Scenario: press 60, release 60 (voice still sounding but ungated), press 62.
+// Even though 62 would not normally win over a gated 60 in LOWEST mode, the
+// existing voice is no longer gated so the new note should always win.
+// Same logic applies to HIGHEST mode (release 65, press 60 should win).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Mono Legato - LOWEST: releasing voice does not block higher new note")
+{
+    auto tp = TestPlayer<32, false>();
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+    auto &vm = tp.voiceManager;
+
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+    vm.setMonoPriorityMode(0, vm_t::MonoPriorityMode::LOWEST);
+
+    // Press 60 — voice at 60, gated
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+
+    // Release 60 — voice now releasing (ungated), still sounding
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.8);
+    REQUIRE_VOICE_COUNTS(1, 0);
+
+    // Press 62 — 62 > 60 would normally lose in LOWEST mode, but 60 is no longer
+    // gated so the new note must win and the voice should move to 62
+    vm.processNoteOnEvent(0, 0, 62, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 62);
+}
+
+TEST_CASE("Mono Legato - HIGHEST: releasing voice does not block lower new note")
+{
+    auto tp = TestPlayer<32, false>();
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+    auto &vm = tp.voiceManager;
+
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+    vm.setMonoPriorityMode(0, vm_t::MonoPriorityMode::HIGHEST);
+
+    // Press 65 — voice at 65, gated
+    vm.processNoteOnEvent(0, 0, 65, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 65);
+
+    // Release 65 — voice now releasing (ungated), still sounding
+    vm.processNoteOffEvent(0, 0, 65, -1, 0.8);
+    REQUIRE_VOICE_COUNTS(1, 0);
+
+    // Press 60 — 60 < 65 would normally lose in HIGHEST mode, but 65 is no longer
+    // gated so the new note must win and the voice should move to 60
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+}
+
+TEST_CASE("Mono Retrigger - LOWEST: releasing voice does not block higher new note")
+{
+    auto tp = TestPlayer<32, false>();
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+    auto &vm = tp.voiceManager;
+
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO);
+    vm.setMonoPriorityMode(0, vm_t::MonoPriorityMode::LOWEST);
+
+    // Press 60 — voice at 60, gated
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+
+    // Release 60 — voice now releasing (ungated), still sounding
+    vm.processNoteOffEvent(0, 0, 60, -1, 0.8);
+    REQUIRE_VOICE_COUNTS(1, 0);
+
+    // Press 62 — 62 > 60 would normally lose in LOWEST mode, but 60 is no longer
+    // gated so the new note must win and a new voice should appear at 62
+    vm.processNoteOnEvent(0, 0, 62, -1, 0.8, 0);
+    tp.processFor(1);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 62);
+}
+
+TEST_CASE("Mono Retrigger - HIGHEST: releasing voice does not block lower new note")
+{
+    auto tp = TestPlayer<32, false>();
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+    auto &vm = tp.voiceManager;
+
+    vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                   (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO);
+    vm.setMonoPriorityMode(0, vm_t::MonoPriorityMode::HIGHEST);
+
+    // Press 65 — voice at 65, gated
+    vm.processNoteOnEvent(0, 0, 65, -1, 0.8, 0);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 65);
+
+    // Release 65 — voice now releasing (ungated), still sounding
+    vm.processNoteOffEvent(0, 0, 65, -1, 0.8);
+    REQUIRE_VOICE_COUNTS(1, 0);
+
+    // Press 60 — 60 < 65 would normally lose in HIGHEST mode, but 65 is no longer
+    // gated so the new note must win and a new voice should appear at 60
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0);
+    tp.processFor(1);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE_VOICE_MATCH(1, v.key() == 60);
+}
+
+// ---------------------------------------------------------------------------
 // Repeated note (same key re-pressed while still alive) with HIGHEST / LOWEST
 //
 // Scenario: play C, release C (voice still releasing), play C again.
