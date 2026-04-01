@@ -789,12 +789,17 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                     // Check if the new note wins under the mono priority mode.
                     // LATEST always wins (default). HIGHEST only wins if the new key is
                     // higher than the currently playing key; LOWEST only wins if lower.
+                    // If the existing voice is no longer gated (releasing), it cannot
+                    // block the new note regardless of priority mode.
                     auto mpm = details.monoPriorityMode.at(mpg);
                     bool newNoteWins = true;
-                    if (mpm == MonoPriorityMode::HIGHEST)
-                        newNoteWins = (key >= v.key);
-                    else if (mpm == MonoPriorityMode::LOWEST)
-                        newNoteWins = (key <= v.key);
+                    if (v.gated)
+                    {
+                        if (mpm == MonoPriorityMode::HIGHEST)
+                            newNoteWins = (key >= v.key);
+                        else if (mpm == MonoPriorityMode::LOWEST)
+                            newNoteWins = (key <= v.key);
+                    }
 
                     if (newNoteWins)
                     {
@@ -840,6 +845,8 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         {
             // Check stealing priority against the first active voice found (all mono voices
             // for a group share the same key, so comparing once is sufficient).
+            // If the existing voice is no longer gated (releasing), it cannot block the
+            // new note regardless of priority mode.
             bool checkedPriority{false};
             bool newNoteWins{true};
             for (const auto &v : details.voiceInfo)
@@ -848,11 +855,14 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                 {
                     if (!checkedPriority)
                     {
-                        auto mpm = details.monoPriorityMode.at(mpg);
-                        if (mpm == MonoPriorityMode::HIGHEST)
-                            newNoteWins = (key >= v.key);
-                        else if (mpm == MonoPriorityMode::LOWEST)
-                            newNoteWins = (key <= v.key);
+                        if (v.gated)
+                        {
+                            auto mpm = details.monoPriorityMode.at(mpg);
+                            if (mpm == MonoPriorityMode::HIGHEST)
+                                newNoteWins = (key >= v.key);
+                            else if (mpm == MonoPriorityMode::LOWEST)
+                                newNoteWins = (key <= v.key);
+                        }
                         checkedPriority = true;
                     }
 
