@@ -31,6 +31,7 @@ if (${bldtest})
 
             tests/basic_poly.cpp
             tests/mono_playback.cpp
+            tests/playmode_change.cpp
             tests/mpe_tests.cpp
             tests/routing_params.cpp
             tests/stealing_groups.cpp
