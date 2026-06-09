@@ -1077,7 +1077,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
                         }
                     }
                 }
-                auto susCh = dialect == MIDI1Dialect::MIDI1_MPE ? 0 : channel;
+                auto susCh = dialect == MIDI1Dialect::MIDI1_MPE ? mpeGlobalChannel : channel;
                 if (details.sustainOn[susCh])
                 {
                     VML("- Release with sustain on. Checking to see if there are gated voices "
@@ -1132,7 +1132,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
             else
             {
                 // Poly branch ere
-                auto susCh = dialect == MIDI1Dialect::MIDI1_MPE ? 0 : channel;
+                auto susCh = dialect == MIDI1Dialect::MIDI1_MPE ? mpeGlobalChannel : channel;
                 if (details.sustainOn[susCh])
                 {
                     vi.gatedDueToSustain = true;
@@ -1150,7 +1150,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
         }
     }
 
-    auto susCh = dialect == MIDI1Dialect::MIDI1_MPE ? 0 : channel;
+    auto susCh = dialect == MIDI1Dialect::MIDI1_MPE ? mpeGlobalChannel : channel;
     if (details.sustainOn[susCh])
     {
         VML("- Updating just-by-sustain at " << port << " " << channel << " " << key);
