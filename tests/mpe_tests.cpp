@@ -181,3 +181,84 @@ TEST_CASE("MPE Global Channel Pitch Bend")
                 { return v.key() == 60 && v.channel() == 1 && v.mpeBend == 9000; }) == 1);
     REQUIRE(tp.pitchBend[0] == 4000);
 }
+
+TEST_CASE("MPE Sustain On Global Channel")
+{
+    INFO("In MPE, sustain arrives on the global channel (0 by default) and holds notes "
+         "playing on every member channel. Release on the global channel unlatches them.");
+
+    using vm_t = TestPlayer<32, false>::voiceManager_t;
+    auto tp = TestPlayer<32, false>();
+    auto &vm = tp.voiceManager;
+    vm.dialect = vm_t::MIDI1Dialect::MIDI1_MPE;
+
+    REQUIRE(vm.mpeGlobalChannel == 0);
+    REQUIRE_NO_VOICES;
+
+    // One note per member channel 1..15 (channel 0 is the global channel)
+    for (int16_t ch = 1; ch < 16; ++ch)
+        vm.processNoteOnEvent(0, ch, 60, -1, 0.8, 0.0);
+    REQUIRE_VOICE_COUNTS(15, 15);
+
+    // Sustain down on the global channel
+    vm.updateSustainPedal(0, 0, 127);
+
+    // Release every note — all stay gated, held by sustain
+    for (int16_t ch = 1; ch < 16; ++ch)
+        vm.processNoteOffEvent(0, ch, 60, -1, 0.8);
+    REQUIRE_VOICE_COUNTS(15, 15);
+
+    // Sustain up on the global channel releases all of them at once
+    vm.updateSustainPedal(0, 0, 0);
+    REQUIRE_VOICE_COUNTS(15, 0);
+    tp.processFor(6);
+    REQUIRE_NO_VOICES;
+}
+
+TEST_CASE("MPE Global Channel Eight")
+{
+    INFO("With mpeGlobalChannel set to 8, member-channel notes, global pitch bend on "
+         "channel 8, and sustain on channel 8 must all behave as for the default global "
+         "channel 0.");
+
+    using vm_t = TestPlayer<32, false>::voiceManager_t;
+    auto tp = TestPlayer<32, false>();
+    auto &vm = tp.voiceManager;
+    vm.dialect = vm_t::MIDI1Dialect::MIDI1_MPE;
+    vm.mpeGlobalChannel = 8;
+
+    REQUIRE_NO_VOICES;
+
+    // Notes on member channels surrounding the global channel 8
+    const int16_t members[] = {1, 7, 9, 15};
+    for (auto ch : members)
+        vm.processNoteOnEvent(0, ch, 60, -1, 0.8, 0.0);
+    REQUIRE_VOICE_COUNTS(4, 4);
+    REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 60 && v.mpeBend == 0; }) == 4);
+
+    // Pitch bend on the global channel 8 routes to the mono responder (pitchBend[0]),
+    // and must not set mpeBend on any voice
+    vm.routeMIDIPitchBend(0, 8, 4000);
+    REQUIRE(tp.pitchBend[0] == 4000);
+    REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 60 && v.mpeBend == 0; }) == 4);
+
+    // Pitch bend on a member channel sets mpeBend on that channel's voice only
+    vm.routeMIDIPitchBend(0, 9, 9000);
+    REQUIRE(tp.activeVoicesMatching(
+                [](auto &v)
+                { return v.key() == 60 && v.channel() == 9 && v.mpeBend == 9000; }) == 1);
+    REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 60 && v.mpeBend == 0; }) == 3);
+    REQUIRE(tp.pitchBend[0] == 4000);
+
+    // Sustain arrives on the global channel 8 and holds all member-channel notes
+    vm.updateSustainPedal(0, 8, 127);
+    for (auto ch : members)
+        vm.processNoteOffEvent(0, ch, 60, -1, 0.8);
+    REQUIRE_VOICE_COUNTS(4, 4);
+
+    // Sustain release on channel 8 unlatches them
+    vm.updateSustainPedal(0, 8, 0);
+    REQUIRE_VOICE_COUNTS(4, 0);
+    tp.processFor(6);
+    REQUIRE_NO_VOICES;
+}
