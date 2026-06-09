@@ -1453,6 +1453,30 @@ void VoiceManager<Cfg, Responder, MonoResponder>::setPlaymode(uint64_t groupId, 
                                                               uint64_t features)
 {
     details.guaranteeGroup(groupId);
+
+    // Changing the play mode or features of a group while voices are sounding leaves
+    // those voices in a mode they were not started under. Rather than try to reconcile,
+    // hard-terminate every voice in the group (an allSoundsOff scoped to the group) and
+    // clear its held-key state so a later note-off cannot resurrect a voice from it.
+    bool modeChanged =
+        details.playMode[groupId] != pm || details.playModeFeatures[groupId] != features;
+    if (modeChanged)
+    {
+        for (const auto &vi : details.voiceInfo)
+        {
+            if (vi.activeVoiceCookie && vi.polyGroup == groupId)
+            {
+                responder.terminateVoice(vi.activeVoiceCookie);
+            }
+        }
+        for (auto &[p, ks] : details.keyStateByPort)
+        {
+            for (auto &chState : ks)
+                for (auto &keyState : chState)
+                    keyState.erase(groupId);
+        }
+    }
+
     details.playMode[groupId] = pm;
     details.playModeFeatures[groupId] = features;
 }
