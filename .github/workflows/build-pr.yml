@@ -15,6 +15,13 @@ jobs:
           - os: ubuntu-latest
             name: linux
             testExe: build/sst-voicemanager-test
+
+          - os: ubuntu-latest
+            name: linux-clang21-rtsan
+            installClang: true
+            testExe: build/sst-voicemanager-test
+            cmakeArgs: -DUSE_RTSAN=ON
+
           - os: macos-latest
             name: mac
             testExe: build/sst-voicemanager-test
@@ -35,10 +42,17 @@ jobs:
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 12
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 12
 
+      - name: Setup RTSAN
+        if: ${{ matrix.installClang }}
+        uses: egor-tensin/setup-clang@v2
+        with:
+          version: 21
+          platform: x64
+
       - name: Build test
         run: |
-          cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release -DSST_VOICEMANAGER_BUILD_TESTS=TRUE 
-          cmake --build ./build --config Release
+          cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Debug -DSST_VOICEMANAGER_BUILD_TESTS=TRUE ${{ matrix.cmakeArgs }}
+          cmake --build ./build --config Debug
 
       - name: Run test
         run: |
