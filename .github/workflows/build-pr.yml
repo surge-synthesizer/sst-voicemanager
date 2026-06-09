@@ -7,26 +7,27 @@ on:
 
 jobs:
   build_feature:
-    name: Test ${{ matrix.os }}
+    name: Test ${{matrix.name}}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
-            name: linux
+            name: linux gcc12
             testExe: build/sst-voicemanager-test
 
           - os: ubuntu-latest
-            name: linux-clang21-rtsan
+            name: linux clang21 rtsan
             installClang: true
             testExe: build/sst-voicemanager-test
             cmakeArgs: -DUSE_RTSAN=ON
 
           - os: macos-latest
-            name: mac
+            name: mac latest
             testExe: build/sst-voicemanager-test
+
           - os: windows-latest
-            name: win
+            name: win latest
             testExe: build/Release/sst-voicemanager-test.exe
 
     steps:
