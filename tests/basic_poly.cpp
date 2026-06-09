@@ -159,6 +159,29 @@ TEST_CASE("Basic Poly Note On Note Off")
     }
 }
 
+TEST_CASE("Retune Parameter Reaches Voice")
+{
+    INFO("The 6th arg of processNoteOnEvent (retune) is forwarded to initializeMultipleVoices "
+         "and must arrive verbatim on the created voice.");
+
+    TestPlayer<32> tp;
+    auto &vm = tp.voiceManager;
+    REQUIRE_NO_VOICES;
+
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8f, 0.37f);
+    REQUIRE_VOICE_COUNTS(1, 1);
+    REQUIRE(tp.activeVoiceCheck([](auto &v) { return v.key() == 60; },
+                                [](auto &v) { return v.retune == 0.37f; }));
+
+    // A second note with a different (negative) retune; the first voice is unaffected
+    vm.processNoteOnEvent(0, 0, 64, -1, 0.8f, -1.5f);
+    REQUIRE_VOICE_COUNTS(2, 2);
+    REQUIRE(tp.activeVoiceCheck([](auto &v) { return v.key() == 64; },
+                                [](auto &v) { return v.retune == -1.5f; }));
+    REQUIRE(tp.activeVoiceCheck([](auto &v) { return v.key() == 60; },
+                                [](auto &v) { return v.retune == 0.37f; }));
+}
+
 TEST_CASE("Sustain Pedal")
 {
     SECTION("Pedal Down Pre Note")
@@ -297,6 +320,51 @@ TEST_CASE("AllNotesOff")
     REQUIRE_VOICE_COUNTS(8, 0);
 }
 
+TEST_CASE("AllNotesOff Releases Sustained And Mono Voices")
+{
+    SECTION("Sustain-Held Voices Are Released")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE_NO_VOICES;
+
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8f, 0.f);
+        vm.processNoteOnEvent(0, 0, 64, -1, 0.8f, 0.f);
+        vm.updateSustainPedal(0, 0, 127);
+        vm.processNoteOffEvent(0, 0, 60, -1, 0.2f);
+        // 60 is now held only by sustain, so it is still counted as gated
+        REQUIRE_VOICE_COUNTS(2, 2);
+
+        vm.allNotesOff();
+        // Both voices ungate, including the sustain-held one
+        REQUIRE_VOICE_COUNTS(2, 0);
+
+        tp.processFor(10);
+        REQUIRE_NO_VOICES;
+    }
+
+    SECTION("Mono Voice Is Released")
+    {
+        using vm_t = TestPlayer<32>::voiceManager_t;
+        using MF = vm_t::MonoPlayModeFeatures;
+
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, (uint64_t)MF::NATURAL_MONO);
+        REQUIRE_NO_VOICES;
+
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8f, 0.f);
+        vm.processNoteOnEvent(0, 0, 64, -1, 0.8f, 0.f); // mono: still one voice
+        REQUIRE_VOICE_COUNTS(1, 1);
+
+        vm.allNotesOff();
+        REQUIRE_VOICE_COUNTS(1, 0);
+
+        tp.processFor(10);
+        REQUIRE_NO_VOICES;
+    }
+}
+
 TEST_CASE("AllSoundsOff")
 {
     TestPlayer<32> tp;
@@ -392,6 +460,55 @@ TEST_CASE("AllSoundsOffMatching")
 
         REQUIRE_VOICE_COUNTS(1, 1);
         REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 62; }) == 1);
+    }
+}
+
+TEST_CASE("AllSoundsOff Mono Mode")
+{
+    using vm_t = TestPlayer<32>::voiceManager_t;
+    using MF = vm_t::MonoPlayModeFeatures;
+
+    SECTION("Terminates The Mono Voice And Does Not Resurrect On Release")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES, (uint64_t)MF::NATURAL_LEGATO);
+        REQUIRE_NO_VOICES;
+
+        // Two keys held; legato mono collapses to a single voice
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8f, 0.f);
+        vm.processNoteOnEvent(0, 0, 64, -1, 0.8f, 0.f);
+        REQUIRE_VOICE_COUNTS(1, 1);
+
+        vm.allSoundsOff();
+        REQUIRE_NO_VOICES;
+
+        // allSoundsOff terminates instantly, so releasing a still-"held" key must
+        // not retrigger a fresh voice from the leftover held-key state
+        vm.processNoteOffEvent(0, 0, 64, -1, 0.2f);
+        REQUIRE_NO_VOICES;
+        vm.processNoteOffEvent(0, 0, 60, -1, 0.2f);
+        REQUIRE_NO_VOICES;
+    }
+
+    SECTION("allSoundsOffMatching across mono groups")
+    {
+        // Duophonic: even keys -> group 1, odd keys -> group 2, each its own mono voice
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+        tp.polyGroupForKey = [](auto k) { return k % 2 == 0 ? 1 : 2; };
+        vm.setPlaymode(1, vm_t::PlayMode::MONO_NOTES, (uint64_t)MF::NATURAL_MONO);
+        vm.setPlaymode(2, vm_t::PlayMode::MONO_NOTES, (uint64_t)MF::NATURAL_MONO);
+        REQUIRE_NO_VOICES;
+
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8f, 0.f); // group 1
+        vm.processNoteOnEvent(0, 0, 61, -1, 0.8f, 0.f); // group 2
+        REQUIRE_VOICE_COUNTS(2, 2);
+
+        // Terminate only the even-key (group 1) mono voice
+        vm.allSoundsOffMatching([](auto *v) { return v->key() % 2 == 0; });
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 61; }) == 1);
     }
 }
 

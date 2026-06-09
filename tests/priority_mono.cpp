@@ -34,7 +34,7 @@
 // MONO_LEGATO + HIGHEST
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Mono Legato - Stealing Priority HIGHEST: higher note wins")
+TEST_CASE("Mono Legato - HIGHEST: higher note wins")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -58,7 +58,7 @@ TEST_CASE("Mono Legato - Stealing Priority HIGHEST: higher note wins")
     REQUIRE_VOICE_COUNTS(1, 1);
 }
 
-TEST_CASE("Mono Legato - Stealing Priority HIGHEST: lower note does not move voice")
+TEST_CASE("Mono Legato - HIGHEST: lower note does not move voice")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -84,8 +84,7 @@ TEST_CASE("Mono Legato - Stealing Priority HIGHEST: lower note does not move voi
     REQUIRE_VOICE_MATCH(1, v.key() == 65);
 }
 
-TEST_CASE(
-    "Mono Legato - Stealing Priority HIGHEST: release highest, voice moves to next-highest held")
+TEST_CASE("Mono Legato - HIGHEST: release highest, voice to next-highest held")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -122,8 +121,7 @@ TEST_CASE(
     REQUIRE_VOICE_COUNTS(0, 0);
 }
 
-TEST_CASE(
-    "Mono Legato - Stealing Priority HIGHEST: releasing non-winning note clears its held state")
+TEST_CASE("Mono Legato - HIGHEST: releasing non-winning note clears held state")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -161,7 +159,7 @@ TEST_CASE(
 // MONO_LEGATO + LOWEST
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Mono Legato - Stealing Priority LOWEST: lower note wins")
+TEST_CASE("Mono Legato - LOWEST: lower note wins")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -187,7 +185,7 @@ TEST_CASE("Mono Legato - Stealing Priority LOWEST: lower note wins")
     REQUIRE_VOICE_MATCH(1, v.key() == 60);
 }
 
-TEST_CASE("Mono Legato - Stealing Priority LOWEST: release lowest, voice moves to next-lowest held")
+TEST_CASE("Mono Legato - LOWEST: release lowest moves to next-lowest")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -228,7 +226,7 @@ TEST_CASE("Mono Legato - Stealing Priority LOWEST: release lowest, voice moves t
 // MONO_NOTES (retrigger) + HIGHEST
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Mono Retrigger - Stealing Priority HIGHEST: higher note wins")
+TEST_CASE("Mono Retrigger - HIGHEST: higher note wins")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -249,7 +247,7 @@ TEST_CASE("Mono Retrigger - Stealing Priority HIGHEST: higher note wins")
     REQUIRE_VOICE_MATCH(1, v.key() == 65);
 }
 
-TEST_CASE("Mono Retrigger - Stealing Priority HIGHEST: lower note does not retrigger")
+TEST_CASE("Mono Retrigger - HIGHEST: lower note does not retrigger")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -271,7 +269,7 @@ TEST_CASE("Mono Retrigger - Stealing Priority HIGHEST: lower note does not retri
     REQUIRE_VOICE_MATCH(1, v.key() == 65);
 }
 
-TEST_CASE("Mono Retrigger - Stealing Priority HIGHEST: release highest retrigs to held lower note")
+TEST_CASE("Mono Retrigger - HIGHEST: release high retrigs held lower")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -312,7 +310,7 @@ TEST_CASE("Mono Retrigger - Stealing Priority HIGHEST: release highest retrigs t
 // MONO_NOTES (retrigger) + LOWEST
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Mono Retrigger - Stealing Priority LOWEST: lower note wins")
+TEST_CASE("Mono Retrigger - LOWEST: lower note wins")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -338,7 +336,7 @@ TEST_CASE("Mono Retrigger - Stealing Priority LOWEST: lower note wins")
     REQUIRE_VOICE_MATCH(1, v.key() == 60);
 }
 
-TEST_CASE("Mono Retrigger - Stealing Priority LOWEST: release lowest retrigs to held higher note")
+TEST_CASE("Mono Retrigger - LOWEST: release low retrigs held higher")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -506,7 +504,7 @@ TEST_CASE("Mono Retrigger - Sustain interaction with MonoPriorityMode")
 // LATEST still works as before (regression guard)
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Mono Legato - Priority LATEST: any new note always wins (default behaviour)")
+TEST_CASE("Mono Legato - LATEST: any new note always wins")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -536,7 +534,7 @@ TEST_CASE("Mono Legato - Priority LATEST: any new note always wins (default beha
     REQUIRE_VOICE_MATCH(1, v.key() == 50);
 }
 
-TEST_CASE("Mono Retrigger - Priority LATEST: any new note always retrigs (default behaviour)")
+TEST_CASE("Mono Retrigger - LATEST: any new note always retrigs")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -567,7 +565,7 @@ TEST_CASE("Mono Retrigger - Priority LATEST: any new note always retrigs (defaul
 // Same logic applies to HIGHEST mode (release 65, press 60 should win).
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Mono Legato - LOWEST: releasing voice does not block higher new note")
+TEST_CASE("Mono Legato - LOWEST: releasing does not block higher")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -593,7 +591,7 @@ TEST_CASE("Mono Legato - LOWEST: releasing voice does not block higher new note"
     REQUIRE_VOICE_MATCH(1, v.key() == 62);
 }
 
-TEST_CASE("Mono Legato - HIGHEST: releasing voice does not block lower new note")
+TEST_CASE("Mono Legato - HIGHEST: releasing does not block lower")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -619,7 +617,7 @@ TEST_CASE("Mono Legato - HIGHEST: releasing voice does not block lower new note"
     REQUIRE_VOICE_MATCH(1, v.key() == 60);
 }
 
-TEST_CASE("Mono Retrigger - LOWEST: releasing voice does not block higher new note")
+TEST_CASE("Mono Retrigger - LOWEST: releasing does not block higher")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -646,7 +644,7 @@ TEST_CASE("Mono Retrigger - LOWEST: releasing voice does not block higher new no
     REQUIRE_VOICE_MATCH(1, v.key() == 62);
 }
 
-TEST_CASE("Mono Retrigger - HIGHEST: releasing voice does not block lower new note")
+TEST_CASE("Mono Retrigger - HIGHEST: releasing does not block lower")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -681,7 +679,7 @@ TEST_CASE("Mono Retrigger - HIGHEST: releasing voice does not block lower new no
 // always win and retrigger the voice regardless of priority mode.
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Mono Legato - HIGHEST: repeated note (same key) always wins")
+TEST_CASE("Mono Legato - HIGHEST: repeated key always wins")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -706,7 +704,7 @@ TEST_CASE("Mono Legato - HIGHEST: repeated note (same key) always wins")
     REQUIRE_VOICE_MATCH(1, v.key() == 60);
 }
 
-TEST_CASE("Mono Legato - LOWEST: repeated note (same key) always wins")
+TEST_CASE("Mono Legato - LOWEST: repeated key always wins")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -731,7 +729,7 @@ TEST_CASE("Mono Legato - LOWEST: repeated note (same key) always wins")
     REQUIRE_VOICE_MATCH(1, v.key() == 60);
 }
 
-TEST_CASE("Mono Retrigger - HIGHEST: repeated note (same key) always wins")
+TEST_CASE("Mono Retrigger - HIGHEST: repeated key always wins")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
@@ -756,7 +754,7 @@ TEST_CASE("Mono Retrigger - HIGHEST: repeated note (same key) always wins")
     REQUIRE_VOICE_MATCH(1, v.key() == 60);
 }
 
-TEST_CASE("Mono Retrigger - LOWEST: repeated note (same key) always wins")
+TEST_CASE("Mono Retrigger - LOWEST: repeated key always wins")
 {
     auto tp = TestPlayer<32, false>();
     typedef TestPlayer<32, false>::voiceManager_t vm_t;
