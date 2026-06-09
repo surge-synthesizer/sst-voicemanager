@@ -482,3 +482,54 @@ TEST_CASE("Lower Voice Limit Delayed Termination")
     // The end callback has not fired, so all five slots are still counted, with two slated
     REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.slatedForTerminate; }) == 2);
 }
+
+TEST_CASE("Cross-Group Steal Honors Requesting Group Priority")
+{
+    INFO("When the physical pool is full but the requesting group still has headroom, the "
+         "steal crosses groups using the REQUESTING group's stealing priority mode.");
+
+    typedef TestPlayer<8, false>::voiceManager_t vm_t;
+
+    SECTION("HIGHEST steals the highest key across all groups")
+    {
+        TestPlayer<8, false> tp;
+        auto &vm = tp.voiceManager;
+        vm.guaranteeGroup(1);
+
+        // Keys < 64 -> group 0 (the requester), keys >= 64 -> group 1 (the victim pool)
+        tp.polyGroupForKey = [](auto k) { return k < 64 ? 0 : 1; };
+        vm.setStealingPriorityMode(0, vm_t::StealingPriorityMode::HIGHEST);
+
+        for (int k : {60, 61, 62, 63, 64, 65, 66, 67})
+            vm.processNoteOnEvent(0, 0, k, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(8, 8); // pool of 8 is full
+
+        // New group-0 note: group 0 has headroom, pool is full -> steal across groups,
+        // HIGHEST -> key 67 (which lives in group 1)
+        vm.processNoteOnEvent(0, 0, 50, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(8, 8);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 67; }) == 0);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 50; }) == 1);
+    }
+
+    SECTION("LOWEST steals the lowest key across all groups")
+    {
+        TestPlayer<8, false> tp;
+        auto &vm = tp.voiceManager;
+        vm.guaranteeGroup(1);
+
+        // Keys >= 64 -> group 0 (the requester), keys < 64 -> group 1 (the victim pool)
+        tp.polyGroupForKey = [](auto k) { return k >= 64 ? 0 : 1; };
+        vm.setStealingPriorityMode(0, vm_t::StealingPriorityMode::LOWEST);
+
+        for (int k : {60, 61, 62, 63, 64, 65, 66, 67})
+            vm.processNoteOnEvent(0, 0, k, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(8, 8);
+
+        // New group-0 note: LOWEST -> key 60 (which lives in group 1)
+        vm.processNoteOnEvent(0, 0, 70, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(8, 8);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 60; }) == 0);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 70; }) == 1);
+    }
+}

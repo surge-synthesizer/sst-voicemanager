@@ -143,3 +143,41 @@ TEST_CASE("Stealing Priority - Lowest")
         }
     }
 }
+
+TEST_CASE("Stealing Prefers Releasing Voices Before Gated")
+{
+    INFO("A releasing (ungated) voice is stolen before any gated voice, regardless of the "
+         "group's stealing priority mode. The released key (62) is neither the oldest (60) "
+         "nor the highest (63), so its selection can only be the releasing-first tier.");
+
+    typedef TestPlayer<32, false>::voiceManager_t vm_t;
+
+    auto runWith = [](vm_t::StealingPriorityMode mode)
+    {
+        TestPlayer<32, false> tp;
+        auto &vm = tp.voiceManager;
+        vm.setPolyphonyGroupVoiceLimit(0, 4);
+        vm.setStealingPriorityMode(0, mode);
+
+        for (int k : {60, 61, 62, 63})
+            vm.processNoteOnEvent(0, 0, k, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(4, 4);
+
+        // Release the middle key; it is now ungated but still sounding (no processFor)
+        vm.processNoteOffEvent(0, 0, 62, -1, 0.8);
+        REQUIRE_VOICE_COUNTS(4, 3);
+
+        // A new note forces a steal. The releasing voice (62) is taken first, so the
+        // gated voices the priority mode would otherwise pick (60 or 63) survive.
+        vm.processNoteOnEvent(0, 0, 50, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(4, 4);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 62; }) == 0);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 60; }) == 1);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 63; }) == 1);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 50; }) == 1);
+    };
+
+    SECTION("Under OLDEST priority") { runWith(vm_t::StealingPriorityMode::OLDEST); }
+    SECTION("Under HIGHEST priority") { runWith(vm_t::StealingPriorityMode::HIGHEST); }
+    SECTION("Under LOWEST priority") { runWith(vm_t::StealingPriorityMode::LOWEST); }
+}
