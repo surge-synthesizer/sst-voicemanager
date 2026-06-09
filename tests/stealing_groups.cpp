@@ -387,3 +387,98 @@ TEST_CASE("Stealing - up to physical limit with groups")
         }
     }
 }
+
+TEST_CASE("Lower Voice Limit Steals Excess")
+{
+    INFO("Lowering a group's voice limit below its active count steals the excess "
+         "immediately, using the group's stealing priority mode.");
+
+    SECTION("OLDEST default steals the oldest voices")
+    {
+        TestPlayer<32, false> tp;
+        auto &vm = tp.voiceManager;
+
+        vm.setPolyphonyGroupVoiceLimit(0, 6);
+        for (int i = 0; i < 5; ++i)
+            vm.processNoteOnEvent(0, 0, 60 + i, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(5, 5);
+
+        // Drop the limit to 3: the two oldest (keys 60, 61) are stolen
+        vm.setPolyphonyGroupVoiceLimit(0, 3);
+        REQUIRE_VOICE_COUNTS(3, 3);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() >= 62 && v.key() <= 64; }) ==
+                3);
+    }
+
+    SECTION("HIGHEST steals the highest keys")
+    {
+        TestPlayer<32, false> tp;
+        auto &vm = tp.voiceManager;
+        typedef TestPlayer<32, false>::voiceManager_t vm_t;
+
+        vm.setStealingPriorityMode(0, vm_t::StealingPriorityMode::HIGHEST);
+        for (int i = 0; i < 5; ++i)
+            vm.processNoteOnEvent(0, 0, 60 + i, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(5, 5);
+
+        // Drop to 3: the two highest (keys 64, 63) are stolen, 60..62 survive
+        vm.setPolyphonyGroupVoiceLimit(0, 3);
+        REQUIRE_VOICE_COUNTS(3, 3);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() >= 60 && v.key() <= 62; }) ==
+                3);
+    }
+
+    SECTION("Limit at or above active count steals nothing")
+    {
+        TestPlayer<32, false> tp;
+        auto &vm = tp.voiceManager;
+
+        vm.setPolyphonyGroupVoiceLimit(0, 6);
+        for (int i = 0; i < 5; ++i)
+            vm.processNoteOnEvent(0, 0, 60 + i, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(5, 5);
+
+        vm.setPolyphonyGroupVoiceLimit(0, 5);
+        REQUIRE_VOICE_COUNTS(5, 5);
+
+        // Raising the limit also leaves the voices alone
+        vm.setPolyphonyGroupVoiceLimit(0, 10);
+        REQUIRE_VOICE_COUNTS(5, 5);
+    }
+
+    SECTION("Only the targeted group is reduced")
+    {
+        TestPlayer<32, false> tp;
+        auto &vm = tp.voiceManager;
+        vm.guaranteeGroup(1);
+        tp.polyGroupForKey = [](auto k) { return (k % 2 == 0 ? 0 : 1); };
+
+        for (int i = 0; i < 8; ++i)
+            vm.processNoteOnEvent(0, 0, 60 + i, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(8, 8);
+
+        // Lower group 0 (even keys) to 2; group 1 (odd keys) is untouched
+        vm.setPolyphonyGroupVoiceLimit(0, 2);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() % 2 == 0; }) == 2);
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() % 2 == 1; }) == 4);
+    }
+}
+
+TEST_CASE("Lower Voice Limit Delayed Termination")
+{
+    INFO("Under delayed termination the stolen voices are slated for terminate rather than "
+         "reaped instantly.");
+
+    TestPlayer<32, false> tp;
+    tp.terminateInstantly = false;
+    auto &vm = tp.voiceManager;
+
+    vm.setPolyphonyGroupVoiceLimit(0, 6);
+    for (int i = 0; i < 5; ++i)
+        vm.processNoteOnEvent(0, 0, 60 + i, -1, 0.8, 0.0);
+    REQUIRE_VOICE_COUNTS(5, 5);
+
+    vm.setPolyphonyGroupVoiceLimit(0, 3);
+    // The end callback has not fired, so all five slots are still counted, with two slated
+    REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.slatedForTerminate; }) == 2);
+}

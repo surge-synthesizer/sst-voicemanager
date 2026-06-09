@@ -349,6 +349,42 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         return -1;
     }
 
+    // Steal up to `count` voices from a single group, using the group's stealing priority
+    // mode and keeping multi-voice notes (shared transactionId) together. Counts off a local
+    // tally rather than re-reading usedVoices, since under delayed termination the end
+    // callback (which decrements usedVoices) has not run yet.
+    void stealVoicesFromGroup(uint64_t group, int32_t count)
+    {
+        auto pm = stealingPriorityMode.at(group);
+        auto toSteal = count;
+        auto lastToSteal = toSteal + 1;
+        while (toSteal > 0 && toSteal != lastToSteal)
+        {
+            lastToSteal = toSteal;
+            auto idx = findNextStealableVoiceInfo(group, pm);
+            if (idx >= 0)
+            {
+                auto &sv = voiceInfo[idx];
+                vm.responder.terminateVoice(sv.activeVoiceCookie);
+                --toSteal;
+                for (auto &v : voiceInfo)
+                {
+                    if (v.activeVoiceCookie && v.activeVoiceCookie != sv.activeVoiceCookie &&
+                        v.transactionId == sv.transactionId)
+                    {
+                        v.alreadyStole = true;
+                        vm.responder.terminateVoice(v.activeVoiceCookie);
+                        --toSteal;
+                    }
+                }
+            }
+        }
+        // findNextStealableVoiceInfo marks alreadyStole; the note-on path clears it during
+        // placement but we have no placement, so reset it here for the next pass.
+        for (auto &v : voiceInfo)
+            v.alreadyStole = false;
+    }
+
     using continuationData_t = typename VoiceInitInstructionsEntry<Cfg>::continuationData_t;
 
     void doMonoRetrigger(int16_t port, uint64_t polyGroup,
@@ -1435,7 +1471,14 @@ void VoiceManager<Cfg, Responder, MonoResponder>::setPolyphonyGroupVoiceLimit(ui
 {
     details.guaranteeGroup(groupId);
     // A limit below 1 or above the physical pool is meaningless; clamp rather than reject
-    details.polyLimits[groupId] = std::clamp(limit, 1, static_cast<int32_t>(Cfg::maxVoiceCount));
+    auto newLimit = std::clamp(limit, 1, static_cast<int32_t>(Cfg::maxVoiceCount));
+    details.polyLimits[groupId] = newLimit;
+
+    // Lowering the limit below the group's current active count steals the excess now
+    // rather than waiting for the next note-on to enforce it.
+    auto excess = details.usedVoices.at(groupId) - newLimit;
+    if (excess > 0)
+        details.stealVoicesFromGroup(groupId, excess);
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
