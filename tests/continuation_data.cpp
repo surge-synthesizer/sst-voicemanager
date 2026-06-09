@@ -317,7 +317,7 @@ TEST_CASE("Continuation Data - Mono Retrigger Note-On Steal")
                 }) == 1);
 }
 
-TEST_CASE("Continuation Data - Mono Retrigger Note-Off Returns With Prior")
+TEST_CASE("Continuation Data - Mono Retrig Note-Off Prior Data")
 {
     INFO("When a mono note-off finds another key held, getContinuationData is called on the "
          "terminating voice before it is destroyed; the value reaches the voice that takes over");

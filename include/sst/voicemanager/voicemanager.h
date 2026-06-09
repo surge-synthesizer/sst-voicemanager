@@ -247,6 +247,7 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
 
     void guaranteeGroup(uint64_t groupId);
     void setPolyphonyGroupVoiceLimit(uint64_t groupId, int32_t limit);
+    [[nodiscard]] int32_t getPolyphonyGroupVoiceLimit(uint64_t groupId) const;
     void setPlaymode(uint64_t groupId, PlayMode pm,
                      uint64_t features = static_cast<uint64_t>(MonoPlayModeFeatures::NONE));
     void setStealingPriorityMode(uint64_t groupId, StealingPriorityMode pm);

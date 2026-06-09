@@ -55,6 +55,65 @@ TEST_CASE("Stealing Groups - global group")
     }
 }
 
+TEST_CASE("Voice Limit Clamping")
+{
+    SECTION("Zero Clamps To One")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+
+        vm.setPolyphonyGroupVoiceLimit(0, 0);
+        REQUIRE(vm.getPolyphonyGroupVoiceLimit(0) == 1);
+
+        // Behaviorally a limit of 1 means each new note steals the previous one
+        for (int i = 0; i < 5; ++i)
+        {
+            vm.processNoteOnEvent(0, 0, 60 + i, -1, 0.8, 0.0);
+            REQUIRE_VOICE_COUNTS(1, 1);
+        }
+        REQUIRE(tp.activeVoicesMatching([](auto &v) { return v.key() == 64; }) == 1);
+    }
+
+    SECTION("Negative Clamps To One")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+
+        vm.setPolyphonyGroupVoiceLimit(0, -7);
+        REQUIRE(vm.getPolyphonyGroupVoiceLimit(0) == 1);
+    }
+
+    SECTION("Above Pool Clamps To maxVoiceCount")
+    {
+        TestPlayer<8> tp;
+        auto &vm = tp.voiceManager;
+
+        vm.setPolyphonyGroupVoiceLimit(0, 9999);
+        REQUIRE(vm.getPolyphonyGroupVoiceLimit(0) == 8);
+
+        // And the group never exceeds the physical pool
+        for (int i = 0; i < 12; ++i)
+            vm.processNoteOnEvent(0, 0, 50 + i, -1, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(8, 8);
+    }
+
+    SECTION("In-Range Limit Is Stored Verbatim")
+    {
+        TestPlayer<32> tp;
+        auto &vm = tp.voiceManager;
+
+        vm.setPolyphonyGroupVoiceLimit(0, 5);
+        REQUIRE(vm.getPolyphonyGroupVoiceLimit(0) == 5);
+    }
+
+    SECTION("Unset Group Reports maxVoiceCount Default")
+    {
+        TestPlayer<16> tp;
+        auto &vm = tp.voiceManager;
+        REQUIRE(vm.getPolyphonyGroupVoiceLimit(424242) == 16);
+    }
+}
+
 TEST_CASE("Delayed Termination")
 {
     TestPlayer<32> tp;

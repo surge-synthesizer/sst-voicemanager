@@ -1434,7 +1434,18 @@ void VoiceManager<Cfg, Responder, MonoResponder>::setPolyphonyGroupVoiceLimit(ui
                                                                               int32_t limit)
 {
     details.guaranteeGroup(groupId);
-    details.polyLimits[groupId] = limit;
+    // A limit below 1 or above the physical pool is meaningless; clamp rather than reject
+    details.polyLimits[groupId] = std::clamp(limit, 1, static_cast<int32_t>(Cfg::maxVoiceCount));
+}
+
+template <typename Cfg, typename Responder, typename MonoResponder>
+int32_t
+VoiceManager<Cfg, Responder, MonoResponder>::getPolyphonyGroupVoiceLimit(uint64_t groupId) const
+{
+    auto it = details.polyLimits.find(groupId);
+    if (it == details.polyLimits.end())
+        return static_cast<int32_t>(Cfg::maxVoiceCount);
+    return it->second;
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>

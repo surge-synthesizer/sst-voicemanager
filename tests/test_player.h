@@ -69,6 +69,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         bool slatedForTerminate{false};
 
         float velocity, releaseVelocity;
+        float retune{0.f};
 
         pckn_t pckn{-1, -1, -1, -1};
         pckn_t original_pckn{-1, -1, -1, -1};
@@ -302,6 +303,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
             v->pckn = {port, channel, key, noteId};
             v->original_pckn = v->pckn;
             v->velocity = velocity;
+            v->retune = retune;
             v->creationCount = lastCreationCount++;
             v->voiceId = noteId;
             TPT("Last Creation Count is now " << lastCreationCount);

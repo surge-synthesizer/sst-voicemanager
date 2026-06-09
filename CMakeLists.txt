@@ -13,6 +13,11 @@ if (DEFINED SST_VOICEMANAGER_BUILD_TESTS)
 endif()
 if (PROJECT_IS_TOP_LEVEL)
   set(bldtest TRUE)
+  if (USE_RTSAN)
+    add_compile_options(-fsanitize=realtime)
+    add_compile_definitions(USE_RTSAN=TRUE)
+    add_link_options(-fsanitize=realtime)
+  endif()
 endif()
 
 if (MSVC)
@@ -36,6 +41,7 @@ if (${bldtest})
             tests/piano_mode.cpp
             tests/midi1_to_vm.cpp
             tests/note_ids.cpp
+            tests/note_on_return.cpp
             tests/voice_ids.cpp
             tests/continuation_data.cpp
             tests/multi_port.cpp
