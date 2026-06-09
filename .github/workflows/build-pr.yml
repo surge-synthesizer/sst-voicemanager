@@ -28,7 +28,7 @@ jobs:
 
           - os: windows-latest
             name: win latest
-            testExe: build/Release/sst-voicemanager-test.exe
+            testExe: build/Debug/sst-voicemanager-test.exe
 
     steps:
 
