@@ -151,11 +151,66 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         MonoPriorityMode monoPriorityMode{MonoPriorityMode::LATEST};
         PlayMode playMode{PlayMode::POLY_VOICES};
         uint64_t playModeFeatures{static_cast<uint64_t>(MonoPlayModeFeatures::NONE)};
+        // A voice counts against this group and every ancestor up the parent chain.
+        // Default makes every new group a root, preserving flat behavior.
+        uint64_t parentGroup{noPolyphonyGroupParent};
     };
     std::unordered_map<uint64_t, GroupState> groups{};
 
     GroupState &group(uint64_t id) { return groups.at(id); }
     const GroupState &group(uint64_t id) const { return groups.at(id); }
+
+    // Walk g up the parent chain; true if ancestor is hit (g itself counts), false on
+    // reaching a root. Depth cap defends against a malformed cycle.
+    bool isDescendantOrSelf(uint64_t g, uint64_t ancestor) const
+    {
+        size_t guard{0};
+        for (uint64_t c = g; c != noPolyphonyGroupParent; c = group(c).parentGroup)
+        {
+            if (c == ancestor)
+                return true;
+            if (++guard > groups.size() + 1)
+                break;
+        }
+        return false;
+    }
+
+    // A voice in `leaf` counts against leaf and every ancestor; walk the chain applying
+    // delta to each usedVoices. Mirrors how totalUsedVoices is kept, one level up per hop.
+    void adjustSubtreeUsedVoices(uint64_t leaf, int32_t delta)
+    {
+        size_t guard{0};
+        for (uint64_t g = leaf; g != noPolyphonyGroupParent; g = group(g).parentGroup)
+        {
+            group(g).usedVoices += delta;
+            if (++guard > groups.size() + 1)
+                break;
+        }
+    }
+
+    // True if any group names groupId as its parent.
+    bool hasChildren(uint64_t groupId) const
+    {
+        for (const auto &[id, gs] : groups)
+            if (gs.parentGroup == groupId)
+                return true;
+        return false;
+    }
+
+    // Rebuild every group's subtree-inclusive usedVoices from a scan of active voices.
+    // Called after a reparent, whose effect on the subtree counts cannot be applied
+    // incrementally.
+    void recomputeUsedVoices()
+    {
+        for (auto &[id, gs] : groups)
+            gs.usedVoices = 0;
+        for (const auto &vi : voiceInfo)
+        {
+            if (!vi.activeVoiceCookie)
+                continue;
+            adjustSubtreeUsedVoices(vi.polyGroup, 1);
+        }
+    }
 
     int32_t totalUsedVoices{0};
 
@@ -224,7 +279,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         {
             if (vi.activeVoiceCookie == v)
             {
-                --group(vi.polyGroup).usedVoices;
+                adjustSubtreeUsedVoices(vi.polyGroup, -1);
                 --totalUsedVoices;
                 VML("  - Ending voice " << vi.activeVoiceCookie << " pg=" << vi.polyGroup
                                         << " used now is " << group(vi.polyGroup).usedVoices << " ("
@@ -254,7 +309,11 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             {
                 continue;
             }
-            if (v.polyGroup != polygroup && !ignorePolygroup)
+            // polygroup is a steal *scope*: a voice is eligible when its leaf group sits
+            // in that scope's subtree (so a parent scope reaches all its descendants).
+            // ignorePolygroup keeps the GLOBAL-scope "any voice" behavior. With no
+            // hierarchy this is exactly v.polyGroup == polygroup.
+            if (!ignorePolygroup && !isDescendantOrSelf(v.polyGroup, polygroup))
             {
                 continue;
             }
@@ -351,10 +410,12 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         return -1;
     }
 
-    // Steal up to `count` voices from a single group, using the group's stealing priority
-    // mode and keeping multi-voice notes (shared transactionId) together. Counts off a local
-    // tally rather than re-reading usedVoices, since under delayed termination the end
-    // callback (which decrements usedVoices) has not run yet.
+    // Steal up to `count` voices from a group's subtree (findNextStealableVoiceInfo is
+    // scope-based: any voice whose leaf isDescendantOrSelf of `group` is eligible), using
+    // the group's stealing priority mode and keeping multi-voice notes (shared
+    // transactionId) together. Counts off a local tally rather than re-reading usedVoices,
+    // since under delayed termination the end callback (which decrements usedVoices) has
+    // not run yet.
     void stealVoicesFromGroup(uint64_t group, int32_t count)
     {
         auto pm = this->group(group).stealingPriorityMode;
@@ -539,7 +600,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
                         << mostRecentVoiceCounter << " at pckn=" << port << "/" << dch << "/" << dk
                         << "/" << dnid << " pg=" << vi.polyGroup);
 
-                    ++group(vi.polyGroup).usedVoices;
+                    adjustSubtreeUsedVoices(vi.polyGroup, 1);
                     ++totalUsedVoices;
 
                     --voicesLeft;
@@ -754,29 +815,48 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         VML("Poly Stealing:");
         VML("- Voice " << i << " group=" << polyGroup << " mode=" << static_cast<int>(pm));
         VML("- Checking polygroup " << polyGroup);
-        int32_t voiceLimit{details.group(polyGroup).polyLimit};
-        int32_t voicesUsed{details.group(polyGroup).usedVoices};
-        int32_t groupFreeVoices = std::max(0, voiceLimit - voicesUsed);
 
+        // Free voices is the min over polyGroup's whole ancestor chain and the global
+        // pool. The steal scope is the deepest full level on that chain (the global pool
+        // is the topmost level): a voice in its subtree decrements it and every shallower
+        // full ancestor at once, while a leaf below it is left free to grow.
         int32_t globalFreeVoices = Cfg::maxVoiceCount - details.totalUsedVoices;
-        int32_t voicesFree = std::min(groupFreeVoices, globalFreeVoices);
+        int32_t voicesFree = globalFreeVoices;
+        uint64_t stealScope{polyGroup};
+        bool stealGlobal{false};
+        bool foundFull{false};
+        for (uint64_t g = polyGroup; g != noPolyphonyGroupParent; g = details.group(g).parentGroup)
+        {
+            // Raw free can go negative under delayed termination (usedVoices outruns the
+            // limit until the end callback fires); clamp for the budget min but keep the
+            // raw sign to detect a full level.
+            int32_t gFreeRaw = details.group(g).polyLimit - details.group(g).usedVoices;
+            voicesFree = std::min(voicesFree, std::max(0, gFreeRaw));
+            if (gFreeRaw <= 0 && !foundFull)
+            {
+                stealScope = g;
+                foundFull = true;
+            }
+        }
+        if (!foundFull && globalFreeVoices <= 0)
+            stealGlobal = true;
+
         VML("- VoicesFree=" << voicesFree << " toBeCreated=" << createdByPolyGroup.at(polyGroup)
-                            << " voiceLimit=" << voiceLimit << " voicesUsed=" << voicesUsed
-                            << " groupFreeVoices=" << groupFreeVoices
+                            << " stealScope=" << stealScope << " stealGlobal=" << stealGlobal
                             << " globalFreeVoices=" << globalFreeVoices);
 
         auto voicesToSteal = std::max(createdByPolyGroup.at(polyGroup) - voicesFree, 0);
-        auto stealFromPolyGroup{polyGroup};
 
         VML("- Voices to steal is " << voicesToSteal);
         auto lastVoicesToSteal = voicesToSteal + 1;
         while (voicesToSteal > 0 && voicesToSteal != lastVoicesToSteal)
         {
             lastVoicesToSteal = voicesToSteal;
+            // Priority mode is the triggering leaf's, even when the steal scope is an
+            // ancestor (decision #1); we may switch to group(stealScope)'s mode later.
             auto stealVoiceIndex = details.findNextStealableVoiceInfo(
-                polyGroup, details.group(polyGroup).stealingPriorityMode,
-                groupFreeVoices > 0 && globalFreeVoices == 0);
-            VML("- " << voicesToSteal << " from " << stealFromPolyGroup << " stealing voice "
+                stealScope, details.group(polyGroup).stealingPriorityMode, stealGlobal);
+            VML("- " << voicesToSteal << " from " << stealScope << " stealing voice "
                      << stealVoiceIndex);
             if (stealVoiceIndex >= 0)
             {
@@ -1029,7 +1109,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                     << " avc=" << vi.activeVoiceCookie);
 
                 assert(details.groups.find(vi.polyGroup) != details.groups.end());
-                ++details.group(vi.polyGroup).usedVoices;
+                details.adjustSubtreeUsedVoices(vi.polyGroup, 1);
                 ++details.totalUsedVoices;
                 return true;
             }
@@ -1492,10 +1572,44 @@ VoiceManager<Cfg, Responder, MonoResponder>::getPolyphonyGroupVoiceLimit(uint64_
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-void VoiceManager<Cfg, Responder, MonoResponder>::setPlaymode(uint64_t groupId, PlayMode pm,
+bool VoiceManager<Cfg, Responder, MonoResponder>::setPolyphonyGroupParent(uint64_t childGroup,
+                                                                          uint64_t parentGroupId)
+{
+    details.guaranteeGroup(childGroup);
+
+    if (parentGroupId == noPolyphonyGroupParent)
+    {
+        details.group(childGroup).parentGroup = noPolyphonyGroupParent;
+        details.recomputeUsedVoices();
+        return true;
+    }
+
+    details.guaranteeGroup(parentGroupId);
+
+    // Reject a cycle: parentGroupId may not already sit in childGroup's subtree
+    // (childGroup == parentGroupId is the self-parent case and is caught here too).
+    if (details.isDescendantOrSelf(parentGroupId, childGroup))
+        return false;
+
+    // Only leaf groups may be MONO; a parent must be POLY.
+    if (details.group(parentGroupId).playMode != PlayMode::POLY_VOICES)
+        return false;
+
+    details.group(childGroup).parentGroup = parentGroupId;
+    details.recomputeUsedVoices();
+    return true;
+}
+
+template <typename Cfg, typename Responder, typename MonoResponder>
+bool VoiceManager<Cfg, Responder, MonoResponder>::setPlaymode(uint64_t groupId, PlayMode pm,
                                                               uint64_t features)
 {
     details.guaranteeGroup(groupId);
+
+    // Only leaf groups may be MONO; a group with children must stay POLY so the mono
+    // machinery (which keys on a voice's exact leaf group) never silently no-ops.
+    if (pm != PlayMode::POLY_VOICES && details.hasChildren(groupId))
+        return false;
 
     // Changing the play mode or features of a group while voices are sounding leaves
     // those voices in a mode they were not started under. Rather than try to reconcile,
@@ -1522,6 +1636,17 @@ void VoiceManager<Cfg, Responder, MonoResponder>::setPlaymode(uint64_t groupId, 
 
     details.group(groupId).playMode = pm;
     details.group(groupId).playModeFeatures = features;
+    return true;
+}
+
+template <typename Cfg, typename Responder, typename MonoResponder>
+typename VoiceManager<Cfg, Responder, MonoResponder>::PlayMode
+VoiceManager<Cfg, Responder, MonoResponder>::getPlaymode(uint64_t groupId) const
+{
+    auto it = details.groups.find(groupId);
+    if (it == details.groups.end())
+        return PlayMode::POLY_VOICES;
+    return it->second.playMode;
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
