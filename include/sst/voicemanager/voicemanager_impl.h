@@ -139,12 +139,24 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         }
     };
     std::array<VoiceInfo, Cfg::maxVoiceCount> voiceInfo{};
-    std::unordered_map<uint64_t, int32_t> polyLimits{};
-    std::unordered_map<uint64_t, int32_t> usedVoices{};
-    std::unordered_map<uint64_t, StealingPriorityMode> stealingPriorityMode{};
-    std::unordered_map<uint64_t, MonoPriorityMode> monoPriorityMode{};
-    std::unordered_map<uint64_t, PlayMode> playMode{};
-    std::unordered_map<uint64_t, uint64_t> playModeFeatures{};
+
+    // All per-group state in one struct keyed by a single map, rather than six parallel
+    // maps. One hash lookup per group touched, atomic group lifecycle, and a single
+    // allocator to swap for std::pmr later.
+    struct GroupState
+    {
+        int32_t polyLimit{Cfg::maxVoiceCount};
+        int32_t usedVoices{0};
+        StealingPriorityMode stealingPriorityMode{StealingPriorityMode::OLDEST};
+        MonoPriorityMode monoPriorityMode{MonoPriorityMode::LATEST};
+        PlayMode playMode{PlayMode::POLY_VOICES};
+        uint64_t playModeFeatures{static_cast<uint64_t>(MonoPlayModeFeatures::NONE)};
+    };
+    std::unordered_map<uint64_t, GroupState> groups{};
+
+    GroupState &group(uint64_t id) { return groups.at(id); }
+    const GroupState &group(uint64_t id) const { return groups.at(id); }
+
     int32_t totalUsedVoices{0};
 
     struct IndividualKeyState
@@ -159,18 +171,8 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
 
     void guaranteeGroup(uint64_t groupId)
     {
-        if (polyLimits.find(groupId) == polyLimits.end())
-            polyLimits[groupId] = Cfg::maxVoiceCount;
-        if (usedVoices.find(groupId) == usedVoices.end())
-            usedVoices[groupId] = 0;
-        if (stealingPriorityMode.find(groupId) == stealingPriorityMode.end())
-            stealingPriorityMode[groupId] = StealingPriorityMode::OLDEST;
-        if (monoPriorityMode.find(groupId) == monoPriorityMode.end())
-            monoPriorityMode[groupId] = MonoPriorityMode::LATEST;
-        if (playMode.find(groupId) == playMode.end())
-            playMode[groupId] = PlayMode::POLY_VOICES;
-        if (playModeFeatures.find(groupId) == playModeFeatures.end())
-            playModeFeatures[groupId] = static_cast<uint64_t>(MonoPlayModeFeatures::NONE);
+        // default-constructs a GroupState (carrying every per-group default) only if absent
+        groups.try_emplace(groupId);
     }
 
     typename VoiceBeginBufferEntry<Cfg>::buffer_t voiceBeginWorkingBuffer{};
@@ -222,10 +224,10 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         {
             if (vi.activeVoiceCookie == v)
             {
-                --usedVoices.at(vi.polyGroup);
+                --group(vi.polyGroup).usedVoices;
                 --totalUsedVoices;
                 VML("  - Ending voice " << vi.activeVoiceCookie << " pg=" << vi.polyGroup
-                                        << " used now is " << usedVoices.at(vi.polyGroup) << " ("
+                                        << " used now is " << group(vi.polyGroup).usedVoices << " ("
                                         << totalUsedVoices << ")");
                 vi.activeVoiceCookie = nullptr;
             }
@@ -355,7 +357,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
     // callback (which decrements usedVoices) has not run yet.
     void stealVoicesFromGroup(uint64_t group, int32_t count)
     {
-        auto pm = stealingPriorityMode.at(group);
+        auto pm = this->group(group).stealingPriorityMode;
         auto toSteal = count;
         auto lastToSteal = toSteal + 1;
         while (toSteal > 0 && toSteal != lastToSteal)
@@ -392,7 +394,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
     {
         VML("=== MONO mode voice retrigger or move for " << polyGroup);
         auto &ks = keyStateByPort[port];
-        auto ft = playModeFeatures.at(polyGroup);
+        auto ft = group(polyGroup).playModeFeatures;
         int dch{-1}, dk{-1};
         float dvel{0.f};
 
@@ -537,7 +539,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
                         << mostRecentVoiceCounter << " at pckn=" << port << "/" << dch << "/" << dk
                         << "/" << dnid << " pg=" << vi.polyGroup);
 
-                    ++usedVoices.at(vi.polyGroup);
+                    ++group(vi.polyGroup).usedVoices;
                     ++totalUsedVoices;
 
                     --voicesLeft;
@@ -724,11 +726,11 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
     std::unordered_set<uint64_t> monoGroups;
     for (int i = 0; i < voicesToBeLaunched; ++i)
     {
-        assert(details.playMode.find(details.voiceBeginWorkingBuffer[i].polyphonyGroup) !=
-               details.playMode.end());
+        assert(details.groups.find(details.voiceBeginWorkingBuffer[i].polyphonyGroup) !=
+               details.groups.end());
 
         ++createdByPolyGroup[details.voiceBeginWorkingBuffer[i].polyphonyGroup];
-        if (details.playMode[details.voiceBeginWorkingBuffer[i].polyphonyGroup] ==
+        if (details.group(details.voiceBeginWorkingBuffer[i].polyphonyGroup).playMode ==
             PlayMode::MONO_NOTES)
         {
             monoGroups.insert(details.voiceBeginWorkingBuffer[i].polyphonyGroup);
@@ -743,19 +745,17 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         details.voiceInitInstructionsBuffer[i] = {};
         const auto &vbb = details.voiceBeginWorkingBuffer[i];
         auto polyGroup = vbb.polyphonyGroup;
-        assert(details.playMode.find(polyGroup) != details.playMode.end());
+        assert(details.groups.find(polyGroup) != details.groups.end());
 
-        auto pm = details.playMode.at(polyGroup);
+        auto pm = details.group(polyGroup).playMode;
         if (pm == PlayMode::MONO_NOTES)
             continue;
-
-        assert(details.polyLimits.find(polyGroup) != details.polyLimits.end());
 
         VML("Poly Stealing:");
         VML("- Voice " << i << " group=" << polyGroup << " mode=" << static_cast<int>(pm));
         VML("- Checking polygroup " << polyGroup);
-        int32_t voiceLimit{details.polyLimits.at(polyGroup)};
-        int32_t voicesUsed{details.usedVoices.at(polyGroup)};
+        int32_t voiceLimit{details.group(polyGroup).polyLimit};
+        int32_t voicesUsed{details.group(polyGroup).usedVoices};
         int32_t groupFreeVoices = std::max(0, voiceLimit - voicesUsed);
 
         int32_t globalFreeVoices = Cfg::maxVoiceCount - details.totalUsedVoices;
@@ -774,7 +774,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         {
             lastVoicesToSteal = voicesToSteal;
             auto stealVoiceIndex = details.findNextStealableVoiceInfo(
-                polyGroup, details.stealingPriorityMode.at(polyGroup),
+                polyGroup, details.group(polyGroup).stealingPriorityMode,
                 groupFreeVoices > 0 && globalFreeVoices == 0);
             VML("- " << voicesToSteal << " from " << stealFromPolyGroup << " stealing voice "
                      << stealVoiceIndex);
@@ -809,7 +809,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
     for (const auto &mpg : monoGroups)
     {
         VML("- Would steal all voices in " << mpg);
-        auto isLegato = details.playModeFeatures.at(mpg) &
+        auto isLegato = details.group(mpg).playModeFeatures &
                         static_cast<uint64_t>(MonoPlayModeFeatures::MONO_LEGATO);
         VML("- IsLegato : " << isLegato);
         if (isLegato)
@@ -827,7 +827,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                     // higher than the currently playing key; LOWEST only wins if lower.
                     // If the existing voice is no longer gated (releasing), it cannot
                     // block the new note regardless of priority mode.
-                    auto mpm = details.monoPriorityMode.at(mpg);
+                    auto mpm = details.group(mpg).monoPriorityMode;
                     bool newNoteWins = true;
                     if (v.gated)
                     {
@@ -893,7 +893,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                     {
                         if (v.gated)
                         {
-                            auto mpm = details.monoPriorityMode.at(mpg);
+                            auto mpm = details.group(mpg).monoPriorityMode;
                             if (mpm == MonoPriorityMode::HIGHEST)
                                 newNoteWins = (key >= v.key);
                             else if (mpm == MonoPriorityMode::LOWEST)
@@ -1028,8 +1028,8 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
                     << "/" << channel << "/" << key << "/" << noteid << " pg=" << vi.polyGroup
                     << " avc=" << vi.activeVoiceCookie);
 
-                assert(details.usedVoices.find(vi.polyGroup) != details.usedVoices.end());
-                ++details.usedVoices.at(vi.polyGroup);
+                assert(details.groups.find(vi.polyGroup) != details.groups.end());
+                ++details.group(vi.polyGroup).usedVoices;
                 ++details.totalUsedVoices;
                 return true;
             }
@@ -1078,9 +1078,9 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
         {
             VML("- Found matching release note at " << vi.polyGroup << " " << vi.key << " "
                                                     << vi.gated);
-            if (details.playMode[vi.polyGroup] == PlayMode::MONO_NOTES)
+            if (details.group(vi.polyGroup).playMode == PlayMode::MONO_NOTES)
             {
-                if (details.playModeFeatures[vi.polyGroup] &
+                if (details.group(vi.polyGroup).playModeFeatures &
                     static_cast<uint64_t>(MonoPlayModeFeatures::MONO_LEGATO))
                 {
                     bool anyOtherOption = details.anyKeyHeldFor(port, vi.polyGroup, channel, key);
@@ -1242,7 +1242,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::updateSustainPedal(int16_t por
                 VML("- Checking " << vi.gated << " " << vi.gatedDueToSustain << " " << vi.key);
                 if (vi.gatedDueToSustain && vi.matches(port, channelMatch, -1, -1))
                 {
-                    if (details.playMode[vi.polyGroup] == PlayMode::MONO_NOTES)
+                    if (details.group(vi.polyGroup).playMode == PlayMode::MONO_NOTES)
                     {
                         retriggerGroups.insert(vi.polyGroup);
                         responder.releaseVoice(vi.activeVoiceCookie, 0);
@@ -1472,11 +1472,11 @@ void VoiceManager<Cfg, Responder, MonoResponder>::setPolyphonyGroupVoiceLimit(ui
     details.guaranteeGroup(groupId);
     // A limit below 1 or above the physical pool is meaningless; clamp rather than reject
     auto newLimit = std::clamp(limit, 1, static_cast<int32_t>(Cfg::maxVoiceCount));
-    details.polyLimits[groupId] = newLimit;
+    details.group(groupId).polyLimit = newLimit;
 
     // Lowering the limit below the group's current active count steals the excess now
     // rather than waiting for the next note-on to enforce it.
-    auto excess = details.usedVoices.at(groupId) - newLimit;
+    auto excess = details.group(groupId).usedVoices - newLimit;
     if (excess > 0)
         details.stealVoicesFromGroup(groupId, excess);
 }
@@ -1485,10 +1485,10 @@ template <typename Cfg, typename Responder, typename MonoResponder>
 int32_t
 VoiceManager<Cfg, Responder, MonoResponder>::getPolyphonyGroupVoiceLimit(uint64_t groupId) const
 {
-    auto it = details.polyLimits.find(groupId);
-    if (it == details.polyLimits.end())
+    auto it = details.groups.find(groupId);
+    if (it == details.groups.end())
         return static_cast<int32_t>(Cfg::maxVoiceCount);
-    return it->second;
+    return it->second.polyLimit;
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
@@ -1501,8 +1501,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::setPlaymode(uint64_t groupId, 
     // those voices in a mode they were not started under. Rather than try to reconcile,
     // hard-terminate every voice in the group (an allSoundsOff scoped to the group) and
     // clear its held-key state so a later note-off cannot resurrect a voice from it.
-    bool modeChanged =
-        details.playMode[groupId] != pm || details.playModeFeatures[groupId] != features;
+    bool modeChanged = details.group(groupId).playMode != pm ||
+                       details.group(groupId).playModeFeatures != features;
     if (modeChanged)
     {
         for (const auto &vi : details.voiceInfo)
@@ -1520,8 +1520,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::setPlaymode(uint64_t groupId, 
         }
     }
 
-    details.playMode[groupId] = pm;
-    details.playModeFeatures[groupId] = features;
+    details.group(groupId).playMode = pm;
+    details.group(groupId).playModeFeatures = features;
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
@@ -1529,7 +1529,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::setStealingPriorityMode(uint64
                                                                           StealingPriorityMode pm)
 {
     details.guaranteeGroup(groupId);
-    details.stealingPriorityMode[groupId] = pm;
+    details.group(groupId).stealingPriorityMode = pm;
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
@@ -1537,7 +1537,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::setMonoPriorityMode(uint64_t g
                                                                       MonoPriorityMode pm)
 {
     details.guaranteeGroup(groupId);
-    details.monoPriorityMode[groupId] = pm;
+    details.group(groupId).monoPriorityMode = pm;
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
