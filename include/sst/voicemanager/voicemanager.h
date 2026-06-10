@@ -245,11 +245,31 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
     void allSoundsOff();
     void allSoundsOffMatching(std::function<bool(typename Cfg::voice_t *)>);
 
+    /**
+     * Pass as the parent to setPolyphonyGroupParent to detach a group, making it a root
+     * whose only super-constraint is the global voice pool.
+     */
+    static constexpr uint64_t noPolyphonyGroupParent{std::numeric_limits<uint64_t>::max()};
+
     void guaranteeGroup(uint64_t groupId);
     void setPolyphonyGroupVoiceLimit(uint64_t groupId, int32_t limit);
     [[nodiscard]] int32_t getPolyphonyGroupVoiceLimit(uint64_t groupId) const;
-    void setPlaymode(uint64_t groupId, PlayMode pm,
+
+    /**
+     * Make childGroup count its voices against parentGroup (and every ancestor above it),
+     * forming a hierarchy. A voice still belongs to exactly one group but is budgeted by
+     * the whole ancestor chain. Pass noPolyphonyGroupParent to detach. Returns false
+     * (no-op) if it would create a cycle, or if the parent is MONO (only leaf groups may
+     * be MONO).
+     */
+    bool setPolyphonyGroupParent(uint64_t childGroup, uint64_t parentGroup);
+    /**
+     * Set a group's play mode. Returns false (leaving the group unchanged) if a MONO mode
+     * is requested for a group that has children, since only leaf groups may be MONO.
+     */
+    bool setPlaymode(uint64_t groupId, PlayMode pm,
                      uint64_t features = static_cast<uint64_t>(MonoPlayModeFeatures::NONE));
+    [[nodiscard]] PlayMode getPlaymode(uint64_t groupId) const;
     void setStealingPriorityMode(uint64_t groupId, StealingPriorityMode pm);
     void setMonoPriorityMode(uint64_t groupId, MonoPriorityMode pm);
 

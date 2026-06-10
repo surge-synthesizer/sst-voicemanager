@@ -36,6 +36,7 @@ if (${bldtest})
             tests/mpe_tests.cpp
             tests/routing_params.cpp
             tests/stealing_groups.cpp
+            tests/hierarchical_groups.cpp
             tests/stealing_maxvoice.cpp
             tests/stealing_priorities.cpp
             tests/priority_mono.cpp
