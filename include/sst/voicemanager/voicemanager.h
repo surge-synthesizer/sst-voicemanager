@@ -24,6 +24,14 @@
 #include <algorithm>
 #include <functional>
 
+#include <sst/cpputils/rtsan_support.h>
+
+// Tags the audio-thread API points as a realtime, non-throwing context. The `noexcept` is
+// unconditional (it is the realtime contract and clang requires it of a nonblocking function,
+// so the signature stays consistent across builds); the [[clang::nonblocking]] checking only
+// engages under a realtime-sanitizer build and is a no-op on every other compiler.
+#define SST_VOICEMANAGER_NONBLOCKING noexcept SST_CPPUTILS_NONBLOCKING
+
 /**
  * \mainpage SST Voice Manager
  *
@@ -217,33 +225,41 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
     void registerVoiceEndCallback();
 
     bool processNoteOnEvent(int16_t port, int16_t channel, int16_t key, int32_t noteid,
-                            float velocity, float retune);
+                            float velocity, float retune) SST_VOICEMANAGER_NONBLOCKING;
 
     void processNoteOffEvent(int16_t port, int16_t channel, int16_t key, int32_t noteid,
-                             float velocity);
+                             float velocity) SST_VOICEMANAGER_NONBLOCKING;
 
-    void updateSustainPedal(int16_t port, int16_t channel, int8_t level);
+    void updateSustainPedal(int16_t port, int16_t channel,
+                            int8_t level) SST_VOICEMANAGER_NONBLOCKING;
 
-    void routeMIDIPitchBend(int16_t port, int16_t channel, int16_t pb14bit);
+    void routeMIDIPitchBend(int16_t port, int16_t channel,
+                            int16_t pb14bit) SST_VOICEMANAGER_NONBLOCKING;
 
-    void routeMIDI1CC(int16_t port, int16_t channel, int8_t cc, int8_t val);
+    void routeMIDI1CC(int16_t port, int16_t channel, int8_t cc,
+                      int8_t val) SST_VOICEMANAGER_NONBLOCKING;
 
-    void routePolyphonicAftertouch(int16_t port, int16_t channel, int16_t key, int8_t pat);
+    void routePolyphonicAftertouch(int16_t port, int16_t channel, int16_t key,
+                                   int8_t pat) SST_VOICEMANAGER_NONBLOCKING;
 
-    void routeChannelPressure(int16_t port, int16_t channel, int8_t pat);
+    void routeChannelPressure(int16_t port, int16_t channel,
+                              int8_t pat) SST_VOICEMANAGER_NONBLOCKING;
     void routeNoteExpression(int16_t port, int16_t channel, int16_t key, int32_t noteid,
-                             int32_t expression, double value);
+                             int32_t expression, double value) SST_VOICEMANAGER_NONBLOCKING;
 
     void routePolyphonicParameterModulation(int16_t port, int16_t channel, int16_t key,
-                                            int32_t voiceid, uint32_t parameter, double value);
+                                            int32_t voiceid, uint32_t parameter,
+                                            double value) SST_VOICEMANAGER_NONBLOCKING;
     void routeMonophonicParameterModulation(int16_t port, int16_t channel, int16_t key,
-                                            uint32_t parameter, double value);
+                                            uint32_t parameter,
+                                            double value) SST_VOICEMANAGER_NONBLOCKING;
 
-    [[nodiscard]] size_t getVoiceCount() const;
-    [[nodiscard]] size_t getGatedVoiceCount() const;
-    void allNotesOff();
-    void allSoundsOff();
-    void allSoundsOffMatching(std::function<bool(typename Cfg::voice_t *)>);
+    [[nodiscard]] size_t getVoiceCount() const SST_VOICEMANAGER_NONBLOCKING;
+    [[nodiscard]] size_t getGatedVoiceCount() const SST_VOICEMANAGER_NONBLOCKING;
+    void allNotesOff() SST_VOICEMANAGER_NONBLOCKING;
+    void allSoundsOff() SST_VOICEMANAGER_NONBLOCKING;
+    void allSoundsOffMatching(std::function<bool(typename Cfg::voice_t *)>)
+        SST_VOICEMANAGER_NONBLOCKING;
 
     /**
      * Pass as the parent to setPolyphonyGroupParent to detach a group, making it a root
@@ -251,9 +267,17 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
      */
     static constexpr uint64_t noPolyphonyGroupParent{std::numeric_limits<uint64_t>::max()};
 
+    /**
+     * Pre-allocate the per-port voice-tracking state for `port`. Port 0 is always pre-allocated.
+     * For any other port this MUST be called (off the audio thread) before sending note events to
+     * that port: the note-event API is tagged non-blocking and will not lazily create the per-port
+     * state, so a note on an unguaranteed port would violate that constraint and allocate.
+     */
+    void guaranteePort(int16_t port);
     void guaranteeGroup(uint64_t groupId);
     void setPolyphonyGroupVoiceLimit(uint64_t groupId, int32_t limit);
-    [[nodiscard]] int32_t getPolyphonyGroupVoiceLimit(uint64_t groupId) const;
+    [[nodiscard]] int32_t
+    getPolyphonyGroupVoiceLimit(uint64_t groupId) const SST_VOICEMANAGER_NONBLOCKING;
 
     /**
      * Make childGroup count its voices against parentGroup (and every ancestor above it),
@@ -269,7 +293,7 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
      */
     bool setPlaymode(uint64_t groupId, PlayMode pm,
                      uint64_t features = static_cast<uint64_t>(MonoPlayModeFeatures::NONE));
-    [[nodiscard]] PlayMode getPlaymode(uint64_t groupId) const;
+    [[nodiscard]] PlayMode getPlaymode(uint64_t groupId) const SST_VOICEMANAGER_NONBLOCKING;
     void setStealingPriorityMode(uint64_t groupId, StealingPriorityMode pm);
     void setMonoPriorityMode(uint64_t groupId, MonoPriorityMode pm);
 

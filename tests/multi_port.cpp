@@ -24,6 +24,7 @@ TEST_CASE("Multi Port Poly Independence")
     // Releasing on port=0 only releases the port=0 voice; port=1 voice stays alive.
     TestPlayer<32> tp;
     auto &vm = tp.voiceManager;
+    vm.guaranteePort(1); // port 0 is pre-allocated; port 1 must be guaranteed before note events
 
     REQUIRE_NO_VOICES;
 
@@ -70,6 +71,7 @@ TEST_CASE("Multi Port Sustain Is Per Channel")
     // voices that match that port. Send sustain-off on each port to unlatch each voice.
     TestPlayer<32> tp;
     auto &vm = tp.voiceManager;
+    vm.guaranteePort(1); // port 0 is pre-allocated; port 1 must be guaranteed before note events
 
     REQUIRE_NO_VOICES;
 
@@ -111,6 +113,7 @@ TEST_CASE("Multi Port Mono Moves Across Ports")
 
     vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
                    (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_MONO);
+    vm.guaranteePort(1); // port 0 is pre-allocated; port 1 must be guaranteed before note events
 
     REQUIRE_NO_VOICES;
 
@@ -146,6 +149,7 @@ TEST_CASE("Multi Port Legato Moves Across Ports")
 
     vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
                    (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+    vm.guaranteePort(1); // port 0 is pre-allocated; port 1 must be guaranteed before note events
 
     REQUIRE_NO_VOICES;
 

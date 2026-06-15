@@ -281,7 +281,7 @@ TEST_CASE("Hierarchy - only leaf groups may be MONO")
         vm.setPolyphonyGroupVoiceLimit(A, 10);
         tp.polyGroupForKey = [](int16_t) -> uint64_t { return A; };
 
-        REQUIRE_FALSE(vm.setPolyphonyGroupParent(A, G)); // rejected: G is MONO
+        REQUIRE_FALSE(vm.setPolyphonyGroupParent(A, G)); // rejected: G is MONO}
 
         // A is unparented, so it fills to its own limit, not the (would-be) parent's 2.
         for (int i = 0; i < 5; ++i)
