@@ -116,6 +116,7 @@ TEST_CASE("Basic Poly Note On Note Off")
     {
         TestPlayer<32> tp;
         auto &vm = tp.voiceManager;
+
         REQUIRE_NO_VOICES;
 
         // Send a midi message note on, see voice and gated voice tick up

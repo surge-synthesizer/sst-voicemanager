@@ -19,6 +19,7 @@
 #include <type_traits>
 
 #include "voicemanager_constraints.h"
+#include <sst/cpputils/small_hash_map.h>
 
 #include <iostream>
 #include <optional>
@@ -45,7 +46,10 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         std::fill(lastPBByChannel.begin(), lastPBByChannel.end(), 0);
         std::fill(sustainOn.begin(), sustainOn.end(), false);
 
-        keyStateByPort[0] = {};
+        // try_emplace constructs the (large) per-port key-state in place in the map node; never
+        // `keyStateByPort[0] = {}`, which would materialize a ~1MB keyState_t temporary on the
+        // stack and overflow small (e.g. Windows 1MB) stacks.
+        guaranteePort(0);
         guaranteeGroup(0);
     }
 
@@ -220,14 +224,33 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         float inceptionVelocity{0.f};
         bool heldBySustain{false};
     };
-    using keyState_t =
-        std::array<std::array<std::unordered_map<uint64_t, IndividualKeyState>, 128>, 16>;
+    // Assume a single p/c/k participates in no more than this many polygroups before the
+    // per-key store spills to the heap (after which it stays grown). Exceeding it just costs one
+    // allocation on that key, not correctness. This is multiplied across 16x128 cells per port,
+    // so it dominates per-port memory (~560KB/port at 4).
+    static constexpr size_t keyStateInlineGroups{4};
+    using keyGroupMap_t =
+        sst::cpputils::SmallHashMap<uint64_t, IndividualKeyState, keyStateInlineGroups>;
+    using keyState_t = std::array<std::array<keyGroupMap_t, 128>, 16>;
     std::unordered_map<int32_t, keyState_t> keyStateByPort{};
+
+    // Per-transaction scratch for note on/off. Single-threaded and non-re-entrant, so these
+    // live here and are clear()ed per call rather than allocated as locals; bounded by
+    // maxVoiceCount, so the inline buffer never spills.
+    sst::cpputils::SmallHashMap<uint64_t, int32_t, Cfg::maxVoiceCount> createdByPolyGroup;
+    sst::cpputils::SmallHashSet<uint64_t, Cfg::maxVoiceCount> monoGroups;
 
     void guaranteeGroup(uint64_t groupId)
     {
         // default-constructs a GroupState (carrying every per-group default) only if absent
         groups.try_emplace(groupId);
+    }
+
+    void guaranteePort(int32_t port)
+    {
+        // pre-allocate the per-port key-state block (a 16x128 array of group maps) only if
+        // absent, so the non-blocking note API never has to create it on the fly
+        keyStateByPort.try_emplace(port);
     }
 
     typename VoiceBeginBufferEntry<Cfg>::buffer_t voiceBeginWorkingBuffer{};
@@ -449,6 +472,11 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
     }
 
     using continuationData_t = typename VoiceInitInstructionsEntry<Cfg>::continuationData_t;
+
+    // Per-transaction scratch for note off (see createdByPolyGroup note above).
+    sst::cpputils::SmallHashMap<uint64_t, std::optional<continuationData_t>, Cfg::maxVoiceCount>
+        retriggerGroups;
+    sst::cpputils::SmallHashSet<uint64_t, Cfg::maxVoiceCount> sustainRetriggerGroups;
 
     void doMonoRetrigger(int16_t port, uint64_t polyGroup,
                          std::optional<continuationData_t> contData = std::nullopt)
@@ -712,9 +740,9 @@ void VoiceManager<Cfg, Responder, MonoResponder>::registerVoiceEndCallback()
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t port, int16_t channel,
-                                                                     int16_t key, int32_t noteid,
-                                                                     float velocity, float retune)
+bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
+    int16_t port, int16_t channel, int16_t key, int32_t noteid, float velocity,
+    float retune) SST_VOICEMANAGER_NONBLOCKING
 {
     if (channel >= 0 && channel < 16 && key >= 0 && key < 128)
         heldMIDIKeyByChannel[channel][key] = true;
@@ -783,8 +811,10 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
         return true;
     }
 
-    std::unordered_map<uint64_t, int32_t> createdByPolyGroup;
-    std::unordered_set<uint64_t> monoGroups;
+    auto &createdByPolyGroup = details.createdByPolyGroup;
+    auto &monoGroups = details.monoGroups;
+    createdByPolyGroup.clear();
+    monoGroups.clear();
     for (int i = 0; i < voicesToBeLaunched; ++i)
     {
         assert(details.groups.find(details.voiceBeginWorkingBuffer[i].polyphonyGroup) !=
@@ -1140,15 +1170,15 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(int16_t por
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t port, int16_t channel,
-                                                                      int16_t key, int32_t noteid,
-                                                                      float velocity)
+void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(
+    int16_t port, int16_t channel, int16_t key, int32_t noteid,
+    float velocity) SST_VOICEMANAGER_NONBLOCKING
 {
     if (channel >= 0 && channel < 16 && key >= 0 && key < 128)
         heldMIDIKeyByChannel[channel][key] = false;
 
-    std::unordered_map<uint64_t, std::optional<typename Details::continuationData_t>>
-        retriggerGroups;
+    auto &retriggerGroups = details.retriggerGroups;
+    retriggerGroups.clear();
 
     VML("==== PROCESS NOTE OFF " << port << "/" << channel << "/" << key << "/" << noteid << " @ "
                                  << velocity);
@@ -1278,7 +1308,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
     else
     {
         VML("-  Clearing keyStateByPort at " << port << " " << channel << " " << key);
-        details.keyStateByPort[port][channel][key] = {};
+        details.keyStateByPort[port][channel][key].clear();
     }
 
     details.debugDumpKeyState(port);
@@ -1301,8 +1331,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(int16_t po
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-void VoiceManager<Cfg, Responder, MonoResponder>::updateSustainPedal(int16_t port, int16_t channel,
-                                                                     int8_t level)
+void VoiceManager<Cfg, Responder, MonoResponder>::updateSustainPedal(
+    int16_t port, int16_t channel, int8_t level) SST_VOICEMANAGER_NONBLOCKING
 {
     auto sop = details.sustainOn[channel];
     details.sustainOn[channel] = level > 64;
@@ -1312,7 +1342,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::updateSustainPedal(int16_t por
         {
             VML("Sustain Release");
             auto channelMatch = dialect == MIDI1Dialect::MIDI1_MPE ? -1 : channel;
-            std::unordered_set<uint64_t> retriggerGroups;
+            auto &retriggerGroups = details.sustainRetriggerGroups;
+            retriggerGroups.clear();
             // release all voices with sustain gates
             for (auto &vi : details.voiceInfo)
             {
@@ -1332,7 +1363,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::updateSustainPedal(int16_t por
                         responder.releaseVoice(vi.activeVoiceCookie, 0);
                     }
 
-                    details.keyStateByPort[vi.port][vi.channel][vi.key] = {};
+                    details.keyStateByPort[vi.port][vi.channel][vi.key].clear();
 
                     VML("- Gated to False ***");
                     vi.gated = false;
@@ -1361,8 +1392,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::updateSustainPedal(int16_t por
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-void VoiceManager<Cfg, Responder, MonoResponder>::routeMIDIPitchBend(int16_t port, int16_t channel,
-                                                                     int16_t pb14bit)
+void VoiceManager<Cfg, Responder, MonoResponder>::routeMIDIPitchBend(
+    int16_t port, int16_t channel, int16_t pb14bit) SST_VOICEMANAGER_NONBLOCKING
 {
     if (dialect == MIDI1Dialect::MIDI1)
     {
@@ -1387,7 +1418,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::routeMIDIPitchBend(int16_t por
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-size_t VoiceManager<Cfg, Responder, MonoResponder>::getVoiceCount() const
+size_t
+VoiceManager<Cfg, Responder, MonoResponder>::getVoiceCount() const SST_VOICEMANAGER_NONBLOCKING
 {
     size_t res{0};
     for (const auto &vi : details.voiceInfo)
@@ -1398,7 +1430,8 @@ size_t VoiceManager<Cfg, Responder, MonoResponder>::getVoiceCount() const
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-size_t VoiceManager<Cfg, Responder, MonoResponder>::getGatedVoiceCount() const
+size_t
+VoiceManager<Cfg, Responder, MonoResponder>::getGatedVoiceCount() const SST_VOICEMANAGER_NONBLOCKING
 {
     size_t res{0};
     for (const auto &vi : details.voiceInfo)
@@ -1409,10 +1442,9 @@ size_t VoiceManager<Cfg, Responder, MonoResponder>::getGatedVoiceCount() const
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-void VoiceManager<Cfg, Responder, MonoResponder>::routeNoteExpression(int16_t port, int16_t channel,
-                                                                      int16_t key, int32_t noteid,
-                                                                      int32_t expression,
-                                                                      double value)
+void VoiceManager<Cfg, Responder, MonoResponder>::routeNoteExpression(
+    int16_t port, int16_t channel, int16_t key, int32_t noteid, int32_t expression,
+    double value) SST_VOICEMANAGER_NONBLOCKING
 {
     for (auto &vi : details.voiceInfo)
     {
@@ -1426,7 +1458,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::routeNoteExpression(int16_t po
 
 template <typename Cfg, typename Responder, typename MonoResponder>
 void VoiceManager<Cfg, Responder, MonoResponder>::routePolyphonicParameterModulation(
-    int16_t port, int16_t channel, int16_t key, int32_t voiceid, uint32_t parameter, double value)
+    int16_t port, int16_t channel, int16_t key, int32_t voiceid, uint32_t parameter,
+    double value) SST_VOICEMANAGER_NONBLOCKING
 {
     for (auto &vi : details.voiceInfo)
     {
@@ -1439,7 +1472,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::routePolyphonicParameterModula
 
 template <typename Cfg, typename Responder, typename MonoResponder>
 void VoiceManager<Cfg, Responder, MonoResponder>::routeMonophonicParameterModulation(
-    int16_t port, int16_t channel, int16_t key, uint32_t parameter, double value)
+    int16_t port, int16_t channel, int16_t key, uint32_t parameter,
+    double value) SST_VOICEMANAGER_NONBLOCKING
 {
     for (auto &vi : details.voiceInfo)
     {
@@ -1451,9 +1485,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::routeMonophonicParameterModula
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-void VoiceManager<Cfg, Responder, MonoResponder>::routePolyphonicAftertouch(int16_t port,
-                                                                            int16_t channel,
-                                                                            int16_t key, int8_t pat)
+void VoiceManager<Cfg, Responder, MonoResponder>::routePolyphonicAftertouch(
+    int16_t port, int16_t channel, int16_t key, int8_t pat) SST_VOICEMANAGER_NONBLOCKING
 {
     for (auto &vi : details.voiceInfo)
     {
@@ -1465,8 +1498,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::routePolyphonicAftertouch(int1
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-void VoiceManager<Cfg, Responder, MonoResponder>::routeChannelPressure(int16_t port,
-                                                                       int16_t channel, int8_t pat)
+void VoiceManager<Cfg, Responder, MonoResponder>::routeChannelPressure(
+    int16_t port, int16_t channel, int8_t pat) SST_VOICEMANAGER_NONBLOCKING
 {
     if (dialect == MIDI1Dialect::MIDI1)
     {
@@ -1486,8 +1519,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::routeChannelPressure(int16_t p
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-void VoiceManager<Cfg, Responder, MonoResponder>::routeMIDI1CC(int16_t port, int16_t channel,
-                                                               int8_t cc, int8_t val)
+void VoiceManager<Cfg, Responder, MonoResponder>::routeMIDI1CC(
+    int16_t port, int16_t channel, int8_t cc, int8_t val) SST_VOICEMANAGER_NONBLOCKING
 {
     if (dialect == MIDI1Dialect::MIDI1_MPE && channel != mpeGlobalChannel && cc == mpeTimbreCC)
     {
@@ -1507,7 +1540,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::routeMIDI1CC(int16_t port, int
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-void VoiceManager<Cfg, Responder, MonoResponder>::allSoundsOff()
+void VoiceManager<Cfg, Responder, MonoResponder>::allSoundsOff() SST_VOICEMANAGER_NONBLOCKING
 {
     for (const auto &v : details.voiceInfo)
     {
@@ -1520,7 +1553,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::allSoundsOff()
 
 template <typename Cfg, typename Responder, typename MonoResponder>
 void VoiceManager<Cfg, Responder, MonoResponder>::allSoundsOffMatching(
-    std::function<bool(typename Cfg::voice_t *)> pred)
+    std::function<bool(typename Cfg::voice_t *)> pred) SST_VOICEMANAGER_NONBLOCKING
 {
     for (const auto &v : details.voiceInfo)
     {
@@ -1532,7 +1565,7 @@ void VoiceManager<Cfg, Responder, MonoResponder>::allSoundsOffMatching(
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-void VoiceManager<Cfg, Responder, MonoResponder>::allNotesOff()
+void VoiceManager<Cfg, Responder, MonoResponder>::allNotesOff() SST_VOICEMANAGER_NONBLOCKING
 {
     for (auto &v : details.voiceInfo)
     {
@@ -1562,8 +1595,8 @@ void VoiceManager<Cfg, Responder, MonoResponder>::setPolyphonyGroupVoiceLimit(ui
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
-int32_t
-VoiceManager<Cfg, Responder, MonoResponder>::getPolyphonyGroupVoiceLimit(uint64_t groupId) const
+int32_t VoiceManager<Cfg, Responder, MonoResponder>::getPolyphonyGroupVoiceLimit(
+    uint64_t groupId) const SST_VOICEMANAGER_NONBLOCKING
 {
     auto it = details.groups.find(groupId);
     if (it == details.groups.end())
@@ -1642,6 +1675,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::setPlaymode(uint64_t groupId, 
 template <typename Cfg, typename Responder, typename MonoResponder>
 typename VoiceManager<Cfg, Responder, MonoResponder>::PlayMode
 VoiceManager<Cfg, Responder, MonoResponder>::getPlaymode(uint64_t groupId) const
+    SST_VOICEMANAGER_NONBLOCKING
 {
     auto it = details.groups.find(groupId);
     if (it == details.groups.end())
@@ -1669,6 +1703,12 @@ template <typename Cfg, typename Responder, typename MonoResponder>
 void VoiceManager<Cfg, Responder, MonoResponder>::guaranteeGroup(uint64_t groupId)
 {
     details.guaranteeGroup(groupId);
+}
+
+template <typename Cfg, typename Responder, typename MonoResponder>
+void VoiceManager<Cfg, Responder, MonoResponder>::guaranteePort(int16_t port)
+{
+    details.guaranteePort(port);
 }
 } // namespace sst::voicemanager
 #endif // INCLUDE_SST_VOICEMANAGER_VOICEMANAGER_IMPL_H

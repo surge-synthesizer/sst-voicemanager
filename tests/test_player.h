@@ -26,9 +26,27 @@
 #include <tuple>
 #include <sstream>
 #include <map>
+#include <memory>
 
 #include "sst/voicemanager/voicemanager.h"
+#include <sst/cpputils/rtsan_support.h>
 #include <algorithm>
+
+/*
+ * RTSan helpers. The realtime context is established by the [[clang::nonblocking]] tags on the
+ * voice manager API (see SST_VOICEMANAGER_NONBLOCKING), not by anything here. We only need to
+ * count violations: the rtsan logging interceptor (in basic.cpp) bumps RtsanViolations::count,
+ * TestPlayer resets it on construction and CHECKs it is zero on destruction.
+ */
+#if SST_CPPUTILS_HAS_RTSAN
+namespace sst::voicemanager::test
+{
+struct RtsanViolations
+{
+    static int count;
+};
+} // namespace sst::voicemanager::test
+#endif
 
 #define TPT(...)                                                                                   \
     if constexpr (doLog)                                                                           \
@@ -148,6 +166,9 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         {
             if (testPlayer.terminateInstantly)
             {
+                // Instant-terminate is harness bookkeeping: the set insert and resetting the
+                // Voice (which frees its std::map caches) both allocate, neither is the VM.
+                SST_CPPUTILS_RTSAN_DISABLE;
                 TPT("Terminate voice at " << TPD(testPlayer.pcknToString(v->pckn)));
                 testPlayer.voiceEndCallback(v);
                 if (v->voiceId != -1)
@@ -192,16 +213,19 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         void setNoteExpression(Voice *v, int32_t e, double val)
         {
             TPF;
+            SST_CPPUTILS_RTSAN_DISABLE;
             v->noteExpressionCache[e] = val;
         }
         void setVoicePolyphonicParameterModulation(Voice *v, uint32_t e, double val)
         {
             TPF;
+            SST_CPPUTILS_RTSAN_DISABLE;
             v->paramModulationCache[e] = val;
         }
         void setVoiceMonophonicParameterModulation(Voice *v, uint32_t e, double val)
         {
             TPF;
+            SST_CPPUTILS_RTSAN_DISABLE;
             v->monoParamModulationCache[e] = val;
         }
         void setPolyphonicAftertouch(Voice *v, int8_t val)
@@ -228,6 +252,7 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         void discardHostVoice(int32_t voiceId)
         {
             TPF;
+            SST_CPPUTILS_RTSAN_DISABLE; // harness bookkeeping, not the VM
             testPlayer.terminatedVoiceSet.insert(voiceId);
         }
 
@@ -340,7 +365,11 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
     std::array<std::array<int8_t, 128>, 16> midi1CC{};
 
     using voiceManager_t = sst::voicemanager::VoiceManager<Config, Responder, MonoResponder>;
-    voiceManager_t voiceManager;
+    // Heap-allocated: VoiceManager is large (inline key-state/scratch buffers) and overflows the
+    // Windows stack when a TestPlayer lives as a local. voiceManager stays a reference so all the
+    // `.` call sites are unchanged. Declared in this order so the storage is built before the ref.
+    std::unique_ptr<voiceManager_t> voiceManagerStorage;
+    voiceManager_t &voiceManager;
 
     void processFor(size_t times)
     {
@@ -373,9 +402,26 @@ template <size_t voiceCount, bool doLog = false> struct TestPlayer
         }
     }
 
-    TestPlayer() : responder(*this), monoResponder(*this), voiceManager(responder, monoResponder)
+    TestPlayer()
+        : responder(*this), monoResponder(*this),
+          voiceManagerStorage(std::make_unique<voiceManager_t>(responder, monoResponder)),
+          voiceManager(*voiceManagerStorage)
     {
         TPT("Constructed TestPlayer with " << TPD(voiceCount));
+
+#if SST_CPPUTILS_HAS_RTSAN
+        // The realtime context is now established by the [[clang::nonblocking]] tags on the VM
+        // API, not by entering a region here. Just bracket the violation counter per test: reset
+        // on construction, assert clean on destruction. The rtsan interceptor increments it.
+        sst::voicemanager::test::RtsanViolations::count = 0;
+#endif
+    }
+
+    ~TestPlayer()
+    {
+#if SST_CPPUTILS_HAS_RTSAN
+        CHECK(sst::voicemanager::test::RtsanViolations::count == 0);
+#endif
     }
 
     /*

@@ -12,6 +12,14 @@ if (DEFINED SST_VOICEMANAGER_BUILD_TESTS)
   set(bldtest ${SST_VOICEMANAGER_BUILD_TESTS})
 endif()
 if (PROJECT_IS_TOP_LEVEL)
+  if (NOT TARGET sst-cpputils)
+      message(STATUS "Adding CPPUTILS library with CPM")
+      include(cmake/CPM.cmake)
+      CPMAddPackage(NAME sst-cpputils
+                GITHUB_REPOSITORY surge-synthesizer/sst-cpputils
+                GIT_TAG main
+      )
+  endif ()
   set(bldtest TRUE)
   if (USE_RTSAN)
     message(STATUS "Activating RTSAN")
@@ -19,15 +27,22 @@ if (PROJECT_IS_TOP_LEVEL)
     add_compile_definitions(USE_RTSAN=TRUE)
     add_link_options(-fsanitize=realtime)
   endif()
+else()
+    if (NOT TARGET sst-cpputils)
+        message(FATAL_ERROR "sst-voicemanager now requires sst-cpputils. Please stage it before including voicemanager")
+    endif()
 endif()
+
+target_link_libraries(${PROJECT_NAME} INTERFACE sst-cpputils)
 
 if (MSVC)
     target_compile_options(${PROJECT_NAME} INTERFACE /Zc:__cplusplus)
 endif ()
 
 if (${bldtest})
+
     add_executable(${PROJECT_NAME}-test
-            # tests/main.cpp
+            tests/main.cpp
             tests/basic.cpp
 
             tests/basic_poly.cpp
@@ -48,8 +63,6 @@ if (${bldtest})
             tests/voice_ids.cpp
             tests/continuation_data.cpp
             tests/multi_port.cpp
-
-            libs/catch2/catch_amalgamated.cpp
         )
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
