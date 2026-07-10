@@ -57,6 +57,33 @@ TEST_CASE("Poly Multi Key Piano Mode")
         vm.processNoteOnEvent(0, 0, 90, -1, 0.8, 0.0);
         REQUIRE_VOICE_COUNTS(3, 3);
     }
+
+    SECTION("Multi Voice per Key With Note ID (unison retrigger)")
+    {
+        // Same as the multi-voice-per-key case above, but the host supplies a
+        // real note id (as CLAP hosts sometimes do). One note-on expands into three
+        // voices that all share that single note id
+        //
+        // Re-pressing the key while all three are still releasing must
+        // retrigger ALL three, not just the first one.
+        auto tp = TestPlayer<32>();
+        auto &vm = tp.voiceManager;
+        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+
+        REQUIRE_NO_VOICES;
+
+        vm.processNoteOnEvent(0, 0, 90, 900, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(3, 3);
+        tp.processFor(3);
+        vm.processNoteOffEvent(0, 0, 90, 900, 0.2);
+        REQUIRE_VOICE_COUNTS(3, 0);
+        tp.processFor(2);
+        REQUIRE_VOICE_COUNTS(3, 0);
+
+        // Re-press within the release window with a fresh note id.
+        vm.processNoteOnEvent(0, 0, 90, 901, 0.8, 0.0);
+        REQUIRE_VOICE_COUNTS(3, 3); // all three retrigger, not just one
+    }
 }
 
 TEST_CASE("Poly Multi Key Non Piano Mode")

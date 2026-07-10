@@ -751,6 +751,17 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
     {
         bool didAnyRetrigger{false};
         ++details.mostRecentTransactionID;
+
+        // When both the incoming event and the matched voices carry note ids, a
+        // re-press retriggers exactly the voices that belonged to one prior host
+        // note. All voices from a single note-on share a note id, so we lock onto
+        // the first matched voice's (old) note id and retrigger only its cohort.
+        // This keeps host-driven voice stacks 1:1 (each press has a distinct note
+        // id) while retriggering every voice of a single unison note (all sharing
+        // one note id).
+        bool haveRetriggerNoteId{false};
+        int32_t retriggerNoteId{-1};
+
         for (auto &vi : details.voiceInfo)
         {
             if (vi.matches(port, channel, key, -1)) // dont match noteid
@@ -762,6 +773,24 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
                 if (vi.gated && !vi.gatedDueToSustain)
                 {
                     continue;
+                }
+
+                // if both legs have note ids, only retrigger the cohort sharing
+                // the first matched note id (see comment above the loop)
+                auto hadNoteId = vi.noteId != -1;
+                auto hasNoteId = noteid != -1;
+                if (hadNoteId && hasNoteId)
+                {
+                    if (!haveRetriggerNoteId)
+                    {
+                        haveRetriggerNoteId = true;
+                        retriggerNoteId = vi.noteId;
+                    }
+                    else if (vi.noteId != retriggerNoteId)
+                    {
+                        // a different stacked note on this key; leave it releasing
+                        continue;
+                    }
                 }
 
                 if (vi.voiceId > 0)
@@ -778,18 +807,10 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
                 vi.noteIdStackPos =
                     (vi.noteIdStackPos + 1) & (Details::VoiceInfo::noteIdStackSize - 1);
 
-                // if both legs have note ids then only do one voice
-                auto hadNoteId = vi.noteId != -1;
-                auto hasNoteId = noteid != -1;
-
                 vi.noteId = noteid;
                 vi.voiceId = noteid;
                 vi.alreadyStole = false;
 
-                if (hadNoteId && hasNoteId)
-                {
-                    return true;
-                }
                 didAnyRetrigger = true;
             }
         }
