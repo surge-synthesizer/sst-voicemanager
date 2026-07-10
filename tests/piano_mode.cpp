@@ -62,8 +62,8 @@ TEST_CASE("Poly Multi Key Piano Mode")
     {
         // Same as the multi-voice-per-key case above, but the host supplies a
         // real note id (as CLAP hosts sometimes do). One note-on expands into three
-        // voices that all share that single note id 
-        // 
+        // voices that all share that single note id
+        //
         // Re-pressing the key while all three are still releasing must
         // retrigger ALL three, not just the first one.
         auto tp = TestPlayer<32>();
