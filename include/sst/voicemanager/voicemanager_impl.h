@@ -663,6 +663,9 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
                         VML("- Move and retrigger non gated voice");
                         vm.responder.moveAndRetriggerVoice(v.activeVoiceCookie, port, dch, dk,
                                                            dvel);
+                        // The retrigger re-gates the voice, so our record has to say so too or
+                        // the note off for dk will skip releasing it. Note on does the same.
+                        v.gated = true;
                     }
                     v.port = port;
                     v.channel = dch;

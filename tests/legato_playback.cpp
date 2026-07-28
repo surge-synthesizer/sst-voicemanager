@@ -624,6 +624,63 @@ TEST_CASE("Legato Mode Sustain Pedal")
         tp.processFor(20);
         REQUIRE_NO_VOICES;
     }
+
+    SECTION("Sustain lifted onto a still held key")
+    {
+        /*
+         * Releasing the pedal releases every voice it was holding and then, for a legato
+         * group, moves them onto whatever key is still physically down. That move goes
+         * through moveAndRetriggerVoice, which re-gates the voice - so our own record of it
+         * has to say gated too, or the note off for the key it just landed on finds an
+         * ungated voice and skips releasing it, and the note plays forever.
+         *
+         * Reaching that path needs the voice to be sitting on a pedal-held key when two more
+         * keys go down: lifting the pedal then forgets the key the voice was on and retriggers
+         * it onto the other one.
+         */
+        TestPlayer<32> tp;
+        using vm_t = TestPlayer<32>::voiceManager_t;
+        auto &vm = tp.voiceManager;
+
+        vm.setPlaymode(0, vm_t::PlayMode::MONO_NOTES,
+                       (uint64_t)vm_t::MonoPlayModeFeatures::NATURAL_LEGATO);
+
+        REQUIRE_NO_VOICES;
+
+        vm.updateSustainPedal(0, 0, 120);
+
+        vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+
+        // Key up but the pedal keeps it, so the voice stays gated on a key nobody holds
+        vm.processNoteOffEvent(0, 0, 60, -1, 0.4);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+
+        // Two keys genuinely down now; the voice legato-moves to the later one
+        vm.processNoteOnEvent(0, 0, 64, -1, 0.8, 0.0);
+        tp.processFor(10);
+        vm.processNoteOnEvent(0, 0, 67, -1, 0.8, 0.0);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+        REQUIRE_VOICE_MATCH(1, v.key() == 67);
+
+        // The pedal comes up with 64 and 67 still down, so the voice is retriggered onto one
+        // of them rather than left to die - and it comes back gated
+        vm.updateSustainPedal(0, 0, 0);
+        tp.processFor(10);
+        REQUIRE_VOICE_COUNTS(1, 1);
+
+        // ...which is what lets the keys release it
+        vm.processNoteOffEvent(0, 0, 67, -1, 0.4);
+        tp.processFor(1);
+        vm.processNoteOffEvent(0, 0, 64, -1, 0.4);
+        REQUIRE_VOICE_COUNTS(1, 0);
+
+        tp.processFor(20);
+        REQUIRE_NO_VOICES;
+    }
 }
 
 TEST_CASE("Mono Legato Release To Highest")
