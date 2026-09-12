@@ -18,12 +18,13 @@
 #include "test_player.h" // for REQUIRE_VOICE_COUNTS and friends
 
 /*
- * ContTestPlayer is a minimal single-voice-per-note test player whose Config
- * defines continuationData_t, satisfying HasVoiceContinuationData<Cfg> and
- * activating all continuation-data code paths in the voice manager.
+ * ContTestPlayer is a minimal test player whose Config defines continuationData_t,
+ * satisfying HasVoiceContinuationData<Cfg> and activating all continuation-data code
+ * paths in the voice manager. It makes voicesPerNote voices per note-on, which is 1
+ * unless a test raises it to model zones layered on one key.
  *
  * continuationData_t = int32_t.
- * Each voice stores donationState = key * 100 at creation.
+ * Each voice stores donationState = key * 100 + layer at creation.
  * getContinuationData() returns donationState, giving tests a predictable value
  * to assert against without any magic numbers.
  *
@@ -52,8 +53,11 @@ template <size_t N, bool doLog = false> struct ContTestPlayer
         pckn_t original_pckn{-1, -1, -1, -1};
         int32_t voiceId{-1};
 
-        // The value this voice would hand off if stolen: set to key*100 at creation.
+        // The value this voice would hand off if stolen: set to key*100+layer at creation.
         int32_t donationState{0};
+
+        // Which of the layered voices of its note-on this one is.
+        int32_t layer{0};
 
         // What the voice manager passed in VoiceInitInstructionsEntry when this voice started.
         bool receivedFromPlayingVoice{false};
@@ -74,6 +78,7 @@ template <size_t N, bool doLog = false> struct ContTestPlayer
 
     std::array<Voice, N> voiceStorage{};
     std::function<void(Voice *)> voiceEndCallback{nullptr};
+    int32_t voicesPerNote{1};
 
     struct Responder
     {
@@ -86,44 +91,50 @@ template <size_t N, bool doLog = false> struct ContTestPlayer
             sst::voicemanager::VoiceBeginBufferEntry<Config>::buffer_t &buf, uint16_t /*port*/,
             uint16_t /*channel*/, uint16_t /*key*/, int32_t /*noteid*/, float /*velocity*/)
         {
-            buf[0].polyphonyGroup = 0;
-            return 1;
+            for (int32_t i = 0; i < player.voicesPerNote; ++i)
+                buf[i].polyphonyGroup = 0;
+            return player.voicesPerNote;
         }
 
         void endVoiceCreationTransaction(uint16_t, uint16_t, uint16_t, int32_t, float) {}
 
         int32_t initializeMultipleVoices(
-            int32_t /*voices*/,
+            int32_t voices,
             const sst::voicemanager::VoiceInitInstructionsEntry<Config>::buffer_t &instructions,
             sst::voicemanager::VoiceInitBufferEntry<Config>::buffer_t &initBuf, uint16_t port,
             uint16_t channel, uint16_t key, int32_t noteId, float velocity, float /*retune*/)
         {
             using Instr = sst::voicemanager::VoiceInitInstructionsEntry<Config>::Instruction;
-            if (instructions[0].instruction == Instr::SKIP)
+            int32_t created{0};
+            for (int32_t i = 0; i < voices; ++i)
             {
-                initBuf[0].voice = nullptr;
-                return 0;
-            }
-            for (auto &v : player.voiceStorage)
-            {
-                if (v.state != Voice::ACTIVE)
+                initBuf[i].voice = nullptr;
+                if (instructions[i].instruction == Instr::SKIP)
+                    continue;
+
+                for (auto &v : player.voiceStorage)
                 {
-                    v.state = Voice::ACTIVE;
-                    v.runtime = 0;
-                    v.isGated = true;
-                    v.releaseCountdown = 0;
-                    v.velocity = velocity;
-                    v.pckn = {(int16_t)port, (int16_t)channel, (int16_t)key, noteId};
-                    v.original_pckn = v.pckn;
-                    v.voiceId = noteId;
-                    v.donationState = (int16_t)key * 100;
-                    v.receivedFromPlayingVoice = instructions[0].fromPlayingVoice;
-                    v.receivedContData = instructions[0].continuationData;
-                    initBuf[0].voice = &v;
-                    return 1;
+                    if (v.state != Voice::ACTIVE)
+                    {
+                        v.state = Voice::ACTIVE;
+                        v.runtime = 0;
+                        v.isGated = true;
+                        v.releaseCountdown = 0;
+                        v.velocity = velocity;
+                        v.pckn = {(int16_t)port, (int16_t)channel, (int16_t)key, noteId};
+                        v.original_pckn = v.pckn;
+                        v.voiceId = noteId;
+                        v.layer = i;
+                        v.donationState = (int16_t)key * 100 + i;
+                        v.receivedFromPlayingVoice = instructions[i].fromPlayingVoice;
+                        v.receivedContData = instructions[i].continuationData;
+                        initBuf[i].voice = &v;
+                        ++created;
+                        break;
+                    }
                 }
             }
-            return 0;
+            return created;
         }
 
         void terminateVoice(Voice *v)
@@ -454,4 +465,54 @@ TEST_CASE("Continuation Data - Poly Mode Does Not Use Continuation Data")
     REQUIRE(tp.activeVoicesMatching(
                 [](const CTP::Voice &v)
                 { return !v.receivedFromPlayingVoice && v.receivedContData == 0; }) == 2);
+}
+
+TEST_CASE("Continuation Data - Layered Mono Steal Feeds Every New Voice")
+{
+    INFO("With zones layered on one key a mono steal terminates several voices and launches "
+         "several; each launch entry must get its own donor rather than only entry zero");
+
+    auto tp = CTP();
+    tp.voicesPerNote = 2;
+    auto &vm = tp.voiceManager;
+    setNaturalMono(vm);
+
+    // key 60 makes two voices, donationState 6000 and 6001
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8f, 0.f);
+    REQUIRE_VOICE_COUNTS(2, 2);
+    REQUIRE(tp.activeVoicesMatching([](const CTP::Voice &v)
+                                    { return v.key() == 60 && !v.receivedFromPlayingVoice; }) == 2);
+
+    // key 62 steals both; both replacements must be told they came from a playing voice
+    vm.processNoteOnEvent(0, 0, 62, -1, 0.8f, 0.f);
+    REQUIRE_VOICE_COUNTS(2, 2);
+    REQUIRE(tp.activeVoicesMatching([](const CTP::Voice &v)
+                                    { return v.key() == 62 && v.receivedFromPlayingVoice; }) == 2);
+
+    // and each took a distinct donor, layer for layer
+    REQUIRE(tp.activeVoicesMatching([](const CTP::Voice &v)
+                                    { return v.layer == 0 && v.receivedContData == 6000; }) == 1);
+    REQUIRE(tp.activeVoicesMatching([](const CTP::Voice &v)
+                                    { return v.layer == 1 && v.receivedContData == 6001; }) == 1);
+}
+
+TEST_CASE("Continuation Data - More New Voices Than Donors Reuse The Last")
+{
+    INFO("A note-on that launches more voices than the steal terminated still continues every "
+         "one of them, the surplus from the last donor");
+
+    auto tp = CTP();
+    auto &vm = tp.voiceManager;
+    setNaturalMono(vm);
+
+    vm.processNoteOnEvent(0, 0, 60, -1, 0.8f, 0.f);
+    REQUIRE_VOICE_COUNTS(1, 1);
+
+    tp.voicesPerNote = 3;
+    vm.processNoteOnEvent(0, 0, 62, -1, 0.8f, 0.f);
+    REQUIRE_VOICE_COUNTS(3, 3);
+
+    REQUIRE(tp.activeVoicesMatching(
+                [](const CTP::Voice &v)
+                { return v.receivedFromPlayingVoice && v.receivedContData == 6000; }) == 3);
 }
