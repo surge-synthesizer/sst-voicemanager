@@ -1019,6 +1019,19 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
             // new note regardless of priority mode.
             bool checkedPriority{false};
             bool newNoteWins{true};
+
+            // Layered zones give a mono group several voices on one key and several
+            // launch entries, so pair them off rather than tagging entry zero each time
+            int contIdx{0};
+            int lastContEntry{-1};
+            auto nextContEntry = [this, &contIdx, voicesToBeLaunched, mpg]() -> int
+            {
+                while (contIdx < voicesToBeLaunched &&
+                       details.voiceBeginWorkingBuffer[contIdx].polyphonyGroup != mpg)
+                    contIdx++;
+                return contIdx < voicesToBeLaunched ? contIdx++ : -1;
+            };
+
             for (const auto &v : details.voiceInfo)
             {
                 if (v.activeVoiceCookie && v.polyGroup == mpg)
@@ -1039,26 +1052,34 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
                     if (newNoteWins)
                     {
                         VML("- Stealing voice " << v.key);
-                        // Populate continuation data on the matching instruction entry
-                        for (int i = 0; i < voicesToBeLaunched; ++i)
+                        auto i = nextContEntry();
+                        if (i >= 0)
                         {
-                            if (details.voiceBeginWorkingBuffer[i].polyphonyGroup == mpg)
+                            if constexpr (HasVoiceContinuationData<Cfg>)
                             {
-                                if constexpr (HasVoiceContinuationData<Cfg>)
-                                {
-                                    details.voiceInitInstructionsBuffer[i].continuationData =
-                                        responder.getContinuationData(v.activeVoiceCookie);
-                                }
-                                else
-                                {
-                                    details.voiceInitInstructionsBuffer[i].continuationData = v.key;
-                                }
-                                details.voiceInitInstructionsBuffer[i].fromPlayingVoice = true;
-                                break;
+                                details.voiceInitInstructionsBuffer[i].continuationData =
+                                    responder.getContinuationData(v.activeVoiceCookie);
                             }
+                            else
+                            {
+                                details.voiceInitInstructionsBuffer[i].continuationData = v.key;
+                            }
+                            details.voiceInitInstructionsBuffer[i].fromPlayingVoice = true;
+                            lastContEntry = i;
                         }
                         responder.terminateVoice(v.activeVoiceCookie);
                     }
+                }
+            }
+
+            // more new voices than stolen ones; they all continue from the last donor
+            if (lastContEntry >= 0)
+            {
+                for (auto i = nextContEntry(); i >= 0; i = nextContEntry())
+                {
+                    details.voiceInitInstructionsBuffer[i].continuationData =
+                        details.voiceInitInstructionsBuffer[lastContEntry].continuationData;
+                    details.voiceInitInstructionsBuffer[i].fromPlayingVoice = true;
                 }
             }
 
