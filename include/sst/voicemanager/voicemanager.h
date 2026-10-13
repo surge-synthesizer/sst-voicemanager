@@ -148,14 +148,16 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
     } dialect{MIDI1Dialect::MIDI1};
 
     /**
-     * If a key is struck twice while still gated or sustained, do we start a new voice
-     * or do we re-use the voice (and move the note id) or do we trigger a second voice
+     * What a polyphony group does when a key it is already sounding is struck again.
+     * Set per group with setRepeatedKeyMode.
      */
     enum struct RepeatedKeyMode
     {
-        MULTI_VOICE,
-        PIANO
-    } repeatedKeyMode{RepeatedKeyMode::MULTI_VOICE};
+        MULTI_VOICE, ///< start another voice alongside the sounding ones
+        PIANO,       ///< retrigger a releasing or sustained voice in place, keeping its state
+        MONO_PER_KEY ///< end the voices sounding on that key, held or not, and start fresh
+                     ///< ones. Only applies to POLY_VOICES groups.
+    };
 
     /**
      * The voice manager can either run in a mode where it manages to voice limits in a polyphonic
@@ -295,6 +297,9 @@ template <typename Cfg, typename Responder, typename MonoResponder> struct Voice
                      uint64_t features = static_cast<uint64_t>(MonoPlayModeFeatures::NONE));
     [[nodiscard]] PlayMode getPlaymode(uint64_t groupId) const SST_VOICEMANAGER_NONBLOCKING;
     void setStealingPriorityMode(uint64_t groupId, StealingPriorityMode pm);
+    void setRepeatedKeyMode(uint64_t groupId, RepeatedKeyMode rkm);
+    [[nodiscard]] RepeatedKeyMode
+    getRepeatedKeyMode(uint64_t groupId) const SST_VOICEMANAGER_NONBLOCKING;
     void setMonoPriorityMode(uint64_t groupId, MonoPriorityMode pm);
 
     std::array<std::array<bool, 128>, 16> heldMIDIKeyByChannel;

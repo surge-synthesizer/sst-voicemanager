@@ -557,7 +557,7 @@ TEST_CASE("Legato Mode Sustain Pedal")
         REQUIRE_NO_VOICES;
 
         vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1;
-        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO);
 
         vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
         REQUIRE_VOICE_COUNTS(1, 1);
@@ -596,7 +596,7 @@ TEST_CASE("Legato Mode Sustain Pedal")
         REQUIRE_NO_VOICES;
 
         vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1;
-        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO);
 
         vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
         REQUIRE_VOICE_COUNTS(1, 1);

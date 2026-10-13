@@ -24,7 +24,7 @@ TEST_CASE("Poly Multi Key Piano Mode")
     {
         auto tp = TestPlayer<32>();
         auto &vm = tp.voiceManager;
-        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO);
 
         REQUIRE_NO_VOICES;
 
@@ -43,7 +43,7 @@ TEST_CASE("Poly Multi Key Piano Mode")
     {
         auto tp = TestPlayer<32>();
         auto &vm = tp.voiceManager;
-        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO);
 
         REQUIRE_NO_VOICES;
 
@@ -68,7 +68,7 @@ TEST_CASE("Poly Multi Key Piano Mode")
         // retrigger ALL three, not just the first one.
         auto tp = TestPlayer<32>();
         auto &vm = tp.voiceManager;
-        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO);
 
         REQUIRE_NO_VOICES;
 
@@ -92,7 +92,8 @@ TEST_CASE("Poly Multi Key Non Piano Mode")
     {
         auto tp = TestPlayer<32>();
         auto &vm = tp.voiceManager;
-        REQUIRE(vm.repeatedKeyMode == TestPlayer<32>::voiceManager_t::RepeatedKeyMode::MULTI_VOICE);
+        REQUIRE(vm.getRepeatedKeyMode(0) ==
+                TestPlayer<32>::voiceManager_t::RepeatedKeyMode::MULTI_VOICE);
 
         REQUIRE_NO_VOICES;
 
@@ -117,7 +118,8 @@ TEST_CASE("Poly Multi Key Non Piano Mode")
     {
         auto tp = TestPlayer<32>();
         auto &vm = tp.voiceManager;
-        REQUIRE(vm.repeatedKeyMode == TestPlayer<32>::voiceManager_t::RepeatedKeyMode::MULTI_VOICE);
+        REQUIRE(vm.getRepeatedKeyMode(0) ==
+                TestPlayer<32>::voiceManager_t::RepeatedKeyMode::MULTI_VOICE);
 
         REQUIRE_NO_VOICES;
 
@@ -149,7 +151,7 @@ TEST_CASE("Piano Mode Voice Stealing")
 
         auto tp = TestPlayer<4>(); // tight pool so any accidental steal is visible
         auto &vm = tp.voiceManager;
-        vm.repeatedKeyMode = TestPlayer<4>::voiceManager_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, TestPlayer<4>::voiceManager_t::RepeatedKeyMode::PIANO);
 
         // Fill all four slots with keys 60-63
         vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
@@ -179,7 +181,7 @@ TEST_CASE("Piano Mode Voice Stealing")
 
         auto tp = TestPlayer<4>();
         auto &vm = tp.voiceManager;
-        vm.repeatedKeyMode = TestPlayer<4>::voiceManager_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, TestPlayer<4>::voiceManager_t::RepeatedKeyMode::PIANO);
 
         // Fill pool with keys 60-63; key 60 is oldest (lowest voiceCounter)
         vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
@@ -212,7 +214,7 @@ TEST_CASE("Piano Mode Sustain Pedal")
         REQUIRE_NO_VOICES;
 
         vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1;
-        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO);
 
         vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
         REQUIRE_VOICE_COUNTS(1, 1);
@@ -240,7 +242,7 @@ TEST_CASE("Piano Mode Sustain Pedal")
         REQUIRE_NO_VOICES;
 
         vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1;
-        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO);
 
         vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
         vm.processNoteOnEvent(0, 0, 64, -1, 0.8, 0.0);
@@ -274,7 +276,7 @@ TEST_CASE("Piano Mode Sustain Pedal")
         REQUIRE_NO_VOICES;
 
         vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1;
-        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO);
 
         vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
         REQUIRE_VOICE_COUNTS(1, 1);
@@ -313,7 +315,7 @@ TEST_CASE("Piano Mode Sustain Pedal")
         REQUIRE_NO_VOICES;
 
         vm.dialect = TestPlayer<32>::voiceManager_t::MIDI1Dialect::MIDI1;
-        vm.repeatedKeyMode = TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, TestPlayer<32>::voiceManager_t::RepeatedKeyMode::PIANO);
 
         vm.processNoteOnEvent(0, 0, 60, -1, 0.8, 0.0);
         REQUIRE_VOICE_COUNTS(1, 1);

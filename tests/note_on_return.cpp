@@ -19,11 +19,10 @@
 #include "test_player.h"
 
 /*
- * processNoteOnEvent returns a bool. The contract: it returns true only when the
- * note-on was handled by the PIANO fast-retrigger path (an existing, non-gated voice
- * for the same key was re-gated rather than a new voice being created). Every path
- * that runs the normal begin/init voice-creation transaction returns false - including
- * fresh poly notes and all mono note-ons (even when the mono voice is moved or skipped).
+ * processNoteOnEvent returns a bool. The contract: it returns true when any PIANO group
+ * retriggered an existing, non-gated voice on the key in place, even if other groups also
+ * launched new voices. Otherwise it returns false - including fresh poly notes, mono per
+ * key restrikes and all mono note-ons (even when the mono voice is moved or skipped).
  */
 
 TEST_CASE("processNoteOnEvent Return - Poly")
@@ -54,7 +53,7 @@ TEST_CASE("processNoteOnEvent Return - Piano Mode Retrigger")
     {
         TestPlayer<32> tp;
         auto &vm = tp.voiceManager;
-        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, vm_t::RepeatedKeyMode::PIANO);
         REQUIRE_NO_VOICES;
 
         // First strike: no voice exists yet, so this falls through to normal creation
@@ -75,7 +74,7 @@ TEST_CASE("processNoteOnEvent Return - Piano Mode Retrigger")
     {
         TestPlayer<32> tp;
         auto &vm = tp.voiceManager;
-        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, vm_t::RepeatedKeyMode::PIANO);
         REQUIRE_NO_VOICES;
 
         REQUIRE(vm.processNoteOnEvent(0, 0, 60, 1000, 0.8f, 0.f) == false);
@@ -93,7 +92,7 @@ TEST_CASE("processNoteOnEvent Return - Piano Mode Retrigger")
     {
         TestPlayer<32> tp;
         auto &vm = tp.voiceManager;
-        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, vm_t::RepeatedKeyMode::PIANO);
         REQUIRE_NO_VOICES;
 
         REQUIRE(vm.processNoteOnEvent(0, 0, 60, -1, 0.8f, 0.f) == false);

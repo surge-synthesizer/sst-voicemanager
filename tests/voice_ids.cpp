@@ -28,7 +28,7 @@ TEST_CASE("Voice ID in Piano Mode")
     {
         auto tp = player_t();
         vm_t &vm = tp.voiceManager;
-        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, vm_t::RepeatedKeyMode::PIANO);
 
         REQUIRE(vm.getVoiceCount() == 0);
 
@@ -49,7 +49,7 @@ TEST_CASE("Voice ID in Piano Mode")
     {
         auto tp = player_t();
         vm_t &vm = tp.voiceManager;
-        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, vm_t::RepeatedKeyMode::PIANO);
         REQUIRE(vm.getVoiceCount() == 0);
 
         tp.terminatedVoiceSet.clear();
@@ -87,7 +87,7 @@ TEST_CASE("Voice ID in Piano Mode")
     {
         auto tp = player_t();
         vm_t &vm = tp.voiceManager;
-        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, vm_t::RepeatedKeyMode::PIANO);
         REQUIRE(vm.getVoiceCount() == 0);
 
         tp.terminatedVoiceSet.clear();

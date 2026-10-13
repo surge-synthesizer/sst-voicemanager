@@ -155,6 +155,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
         MonoPriorityMode monoPriorityMode{MonoPriorityMode::LATEST};
         PlayMode playMode{PlayMode::POLY_VOICES};
         uint64_t playModeFeatures{static_cast<uint64_t>(MonoPlayModeFeatures::NONE)};
+        RepeatedKeyMode repeatedKeyMode{RepeatedKeyMode::MULTI_VOICE};
         // A voice counts against this group and every ancestor up the parent chain.
         // Default makes every new group a root, preserving flat behavior.
         uint64_t parentGroup{noPolyphonyGroupParent};
@@ -239,6 +240,8 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
     // maxVoiceCount, so the inline buffer never spills.
     sst::cpputils::SmallHashMap<uint64_t, int32_t, Cfg::maxVoiceCount> createdByPolyGroup;
     sst::cpputils::SmallHashSet<uint64_t, Cfg::maxVoiceCount> monoGroups;
+    // piano-mode groups which retriggered a voice this note on, and the note id each locked to
+    sst::cpputils::SmallHashMap<uint64_t, int32_t, Cfg::maxVoiceCount> retriggerNoteIdByGroup;
 
     void guaranteeGroup(uint64_t groupId)
     {
@@ -750,78 +753,65 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
     if (channel >= 0 && channel < 16 && key >= 0 && key < 128)
         heldMIDIKeyByChannel[channel][key] = true;
 
-    if (repeatedKeyMode == RepeatedKeyMode::PIANO)
+    // with note ids, each piano group retriggers only the voices of one prior note
+    auto &retriggerNoteIdByGroup = details.retriggerNoteIdByGroup;
+    retriggerNoteIdByGroup.clear();
+    bool didAnyRetrigger{false};
+
+    for (auto &vi : details.voiceInfo)
     {
-        bool didAnyRetrigger{false};
-        ++details.mostRecentTransactionID;
+        if (!vi.matches(port, channel, key, -1)) // dont match noteid
+            continue;
+        if (details.group(vi.polyGroup).repeatedKeyMode != RepeatedKeyMode::PIANO)
+            continue;
 
-        // When both the incoming event and the matched voices carry note ids, a
-        // re-press retriggers exactly the voices that belonged to one prior host
-        // note. All voices from a single note-on share a note id, so we lock onto
-        // the first matched voice's (old) note id and retrigger only its cohort.
-        // This keeps host-driven voice stacks 1:1 (each press has a distinct note
-        // id) while retriggering every voice of a single unison note (all sharing
-        // one note id).
-        bool haveRetriggerNoteId{false};
-        int32_t retriggerNoteId{-1};
+        /*
+         * This condition allows voice stacks to occur. See the
+         * 'Stacked Voices' piano mode note id test for instance
+         */
+        if (vi.gated && !vi.gatedDueToSustain)
+            continue;
 
-        for (auto &vi : details.voiceInfo)
+        // -1 means the group has retriggered but not yet locked onto a note id
+        auto lock = retriggerNoteIdByGroup.find(vi.polyGroup);
+        if (vi.noteId != -1 && noteid != -1)
         {
-            if (vi.matches(port, channel, key, -1)) // dont match noteid
+            if (lock == retriggerNoteIdByGroup.end() || lock->second == -1)
             {
-                /*
-                 * This condition allows voice stacks to occur. See the
-                 * 'Stacked Voices' piano mode note id test for instance
-                 */
-                if (vi.gated && !vi.gatedDueToSustain)
-                {
-                    continue;
-                }
-
-                // if both legs have note ids, only retrigger the cohort sharing
-                // the first matched note id (see comment above the loop)
-                auto hadNoteId = vi.noteId != -1;
-                auto hasNoteId = noteid != -1;
-                if (hadNoteId && hasNoteId)
-                {
-                    if (!haveRetriggerNoteId)
-                    {
-                        haveRetriggerNoteId = true;
-                        retriggerNoteId = vi.noteId;
-                    }
-                    else if (vi.noteId != retriggerNoteId)
-                    {
-                        // a different stacked note on this key; leave it releasing
-                        continue;
-                    }
-                }
-
-                if (vi.voiceId > 0)
-                    responder.discardHostVoice(vi.voiceId);
-
-                responder.retriggerVoiceWithNewNoteID(vi.activeVoiceCookie, noteid, velocity);
-                vi.gated = true;
-                // We are not gated because of sustain; we are gated because we are gated.
-                // If we release we will turn gatedDueToSustain back on
-                vi.gatedDueToSustain = false;
-                vi.voiceCounter = ++details.mostRecentVoiceCounter;
-                vi.transactionId = details.mostRecentTransactionID;
-                vi.noteIdStack[vi.noteIdStackPos] = noteid;
-                vi.noteIdStackPos =
-                    (vi.noteIdStackPos + 1) & (Details::VoiceInfo::noteIdStackSize - 1);
-
-                vi.noteId = noteid;
-                vi.voiceId = noteid;
-                vi.alreadyStole = false;
-
-                didAnyRetrigger = true;
+                retriggerNoteIdByGroup[vi.polyGroup] = vi.noteId;
+            }
+            else if (vi.noteId != lock->second)
+            {
+                // a different stacked note on this key; leave it releasing
+                continue;
             }
         }
-
-        if (didAnyRetrigger)
+        else if (lock == retriggerNoteIdByGroup.end())
         {
-            return true;
+            retriggerNoteIdByGroup[vi.polyGroup] = -1;
         }
+
+        if (!didAnyRetrigger)
+            ++details.mostRecentTransactionID;
+
+        if (vi.voiceId > 0)
+            responder.discardHostVoice(vi.voiceId);
+
+        responder.retriggerVoiceWithNewNoteID(vi.activeVoiceCookie, noteid, velocity);
+        vi.gated = true;
+        // We are not gated because of sustain; we are gated because we are gated.
+        // If we release we will turn gatedDueToSustain back on
+        vi.gatedDueToSustain = false;
+        vi.voiceCounter = ++details.mostRecentVoiceCounter;
+        vi.transactionId = details.mostRecentTransactionID;
+        vi.noteIdStack[vi.noteIdStackPos] = noteid;
+        vi.noteIdStackPos = (vi.noteIdStackPos + 1) & (Details::VoiceInfo::noteIdStackSize - 1);
+
+        vi.noteId = noteid;
+        vi.voiceId = noteid;
+        vi.alreadyStole = false;
+
+        didAnyRetrigger = true;
     }
 
     VML("- About to call beginVoiceCreationTransaction");
@@ -835,20 +825,63 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
         return true;
     }
 
+    auto isRetriggeredGroup = [&](uint64_t g)
+    { return retriggerNoteIdByGroup.find(g) != retriggerNoteIdByGroup.end(); };
+
+    if (didAnyRetrigger)
+    {
+        bool anyToLaunch{false};
+        for (int i = 0; i < voicesToBeLaunched; ++i)
+            anyToLaunch = anyToLaunch ||
+                          !isRetriggeredGroup(details.voiceBeginWorkingBuffer[i].polyphonyGroup);
+
+        if (!anyToLaunch)
+        {
+            responder.endVoiceCreationTransaction(port, channel, key, noteid, velocity);
+            return true;
+        }
+    }
+
     auto &createdByPolyGroup = details.createdByPolyGroup;
     auto &monoGroups = details.monoGroups;
     createdByPolyGroup.clear();
     monoGroups.clear();
     for (int i = 0; i < voicesToBeLaunched; ++i)
     {
-        assert(details.groups.find(details.voiceBeginWorkingBuffer[i].polyphonyGroup) !=
-               details.groups.end());
+        auto polyGroup = details.voiceBeginWorkingBuffer[i].polyphonyGroup;
+        assert(details.groups.find(polyGroup) != details.groups.end());
 
-        ++createdByPolyGroup[details.voiceBeginWorkingBuffer[i].polyphonyGroup];
-        if (details.group(details.voiceBeginWorkingBuffer[i].polyphonyGroup).playMode ==
-            PlayMode::MONO_NOTES)
+        if (isRetriggeredGroup(polyGroup))
+            continue;
+
+        ++createdByPolyGroup[polyGroup];
+        if (details.group(polyGroup).playMode == PlayMode::MONO_NOTES)
         {
-            monoGroups.insert(details.voiceBeginWorkingBuffer[i].polyphonyGroup);
+            monoGroups.insert(polyGroup);
+        }
+    }
+
+    // MONO_PER_KEY groups end whatever they have sounding on this key, held or not, so
+    // the new strike starts fresh voices.
+    for (const auto &kv : createdByPolyGroup)
+    {
+        auto polyGroup = kv.first;
+        const auto &gs = details.group(polyGroup);
+        if (gs.playMode != PlayMode::POLY_VOICES ||
+            gs.repeatedKeyMode != RepeatedKeyMode::MONO_PER_KEY)
+            continue;
+
+        for (auto &vi : details.voiceInfo)
+        {
+            if (!vi.activeVoiceCookie || vi.alreadyStole || vi.polyGroup != polyGroup ||
+                vi.port != port || vi.channel != channel || vi.key != key)
+                continue;
+
+            VML("- Mono per key ending " << vi.activeVoiceCookie << " in " << polyGroup);
+            responder.terminateVoice(vi.activeVoiceCookie);
+            // a deferred end stays marked so the steal below counts it as freed
+            if (vi.activeVoiceCookie)
+                vi.alreadyStole = true;
         }
     }
 
@@ -862,6 +895,13 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
         auto polyGroup = vbb.polyphonyGroup;
         assert(details.groups.find(polyGroup) != details.groups.end());
 
+        if (isRetriggeredGroup(polyGroup))
+        {
+            details.voiceInitInstructionsBuffer[i].instruction =
+                VoiceInitInstructionsEntry<Cfg>::Instruction::SKIP;
+            continue;
+        }
+
         auto pm = details.group(polyGroup).playMode;
         if (pm == PlayMode::MONO_NOTES)
             continue;
@@ -870,11 +910,17 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
         VML("- Voice " << i << " group=" << polyGroup << " mode=" << static_cast<int>(pm));
         VML("- Checking polygroup " << polyGroup);
 
+        // voices already ending in this group still count as used until they call back
+        int32_t pendingEnd{0};
+        for (const auto &vi : details.voiceInfo)
+            if (vi.activeVoiceCookie && vi.alreadyStole && vi.polyGroup == polyGroup)
+                ++pendingEnd;
+
         // Free voices is the min over polyGroup's whole ancestor chain and the global
         // pool. The steal scope is the deepest full level on that chain (the global pool
         // is the topmost level): a voice in its subtree decrements it and every shallower
         // full ancestor at once, while a leaf below it is left free to grow.
-        int32_t globalFreeVoices = Cfg::maxVoiceCount - details.totalUsedVoices;
+        int32_t globalFreeVoices = Cfg::maxVoiceCount - details.totalUsedVoices + pendingEnd;
         int32_t voicesFree = globalFreeVoices;
         uint64_t stealScope{polyGroup};
         bool stealGlobal{false};
@@ -884,7 +930,8 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
             // Raw free can go negative under delayed termination (usedVoices outruns the
             // limit until the end callback fires); clamp for the budget min but keep the
             // raw sign to detect a full level.
-            int32_t gFreeRaw = details.group(g).polyLimit - details.group(g).usedVoices;
+            int32_t gFreeRaw =
+                details.group(g).polyLimit - details.group(g).usedVoices + pendingEnd;
             voicesFree = std::min(voicesFree, std::max(0, gFreeRaw));
             if (gFreeRaw <= 0 && !foundFull)
             {
@@ -1149,7 +1196,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
 
         responder.endVoiceCreationTransaction(port, channel, key, noteid, velocity);
 
-        return false;
+        return didAnyRetrigger;
     }
 
     auto voicesLeft = voicesLaunched;
@@ -1211,7 +1258,7 @@ bool VoiceManager<Cfg, Responder, MonoResponder>::processNoteOnEvent(
 
     responder.endVoiceCreationTransaction(port, channel, key, noteid, velocity);
 
-    return false;
+    return didAnyRetrigger;
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
@@ -1742,6 +1789,25 @@ void VoiceManager<Cfg, Responder, MonoResponder>::setMonoPriorityMode(uint64_t g
 {
     details.guaranteeGroup(groupId);
     details.group(groupId).monoPriorityMode = pm;
+}
+
+template <typename Cfg, typename Responder, typename MonoResponder>
+void VoiceManager<Cfg, Responder, MonoResponder>::setRepeatedKeyMode(uint64_t groupId,
+                                                                     RepeatedKeyMode rkm)
+{
+    details.guaranteeGroup(groupId);
+    details.group(groupId).repeatedKeyMode = rkm;
+}
+
+template <typename Cfg, typename Responder, typename MonoResponder>
+typename VoiceManager<Cfg, Responder, MonoResponder>::RepeatedKeyMode
+VoiceManager<Cfg, Responder, MonoResponder>::getRepeatedKeyMode(uint64_t groupId) const
+    SST_VOICEMANAGER_NONBLOCKING
+{
+    auto it = details.groups.find(groupId);
+    if (it == details.groups.end())
+        return RepeatedKeyMode::MULTI_VOICE;
+    return it->second.repeatedKeyMode;
 }
 
 template <typename Cfg, typename Responder, typename MonoResponder>
