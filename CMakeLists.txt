@@ -57,6 +57,7 @@ if (${bldtest})
             tests/priority_mono.cpp
             tests/legato_playback.cpp
             tests/piano_mode.cpp
+            tests/repeated_key_mode.cpp
             tests/midi1_to_vm.cpp
             tests/note_ids.cpp
             tests/note_on_return.cpp

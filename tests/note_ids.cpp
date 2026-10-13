@@ -162,7 +162,7 @@ TEST_CASE("Note ID in Poly Piano Mode")
         typedef TestPlayer<32, false>::Voice vc_t;
         vm_t &vm = tp.voiceManager;
 
-        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, vm_t::RepeatedKeyMode::PIANO);
 
         vm.processNoteOnEvent(0, 1, 60, 173, 0.8, 0.0);
         REQUIRE_VOICE_COUNTS(1, 1);
@@ -202,7 +202,7 @@ TEST_CASE("Note ID in Poly Piano Mode")
         typedef TestPlayer<32, false>::Voice vc_t;
         vm_t &vm = tp.voiceManager;
 
-        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, vm_t::RepeatedKeyMode::PIANO);
 
         vm.processNoteOnEvent(0, 1, 60, 173, 0.8, 0.0);
         vm.processNoteOnEvent(0, 1, 60, 174, 0.8, 0.0);
@@ -234,7 +234,7 @@ TEST_CASE("Note ID in Poly Piano Mode")
         typedef TestPlayer<32, false>::Voice vc_t;
         vm_t &vm = tp.voiceManager;
 
-        vm.repeatedKeyMode = vm_t::RepeatedKeyMode::PIANO;
+        vm.setRepeatedKeyMode(0, vm_t::RepeatedKeyMode::PIANO);
 
         vm.processNoteOnEvent(0, 1, 60, 173, 0.8, 0.0);
         vm.processNoteOnEvent(0, 1, 60, 174, 0.8, 0.0);
