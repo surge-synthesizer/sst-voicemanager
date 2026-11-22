@@ -242,6 +242,8 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
     sst::cpputils::SmallHashSet<uint64_t, Cfg::maxVoiceCount> monoGroups;
     // piano-mode groups which retriggered a voice this note on, and the note id each locked to
     sst::cpputils::SmallHashMap<uint64_t, int32_t, Cfg::maxVoiceCount> retriggerNoteIdByGroup;
+    // packed port/channel/key of each voice a wildcard note off matches
+    sst::cpputils::SmallHashSet<uint64_t, Cfg::maxVoiceCount> wildcardOffTargets;
 
     void guaranteeGroup(uint64_t groupId)
     {
@@ -1266,6 +1268,28 @@ void VoiceManager<Cfg, Responder, MonoResponder>::processNoteOffEvent(
     int16_t port, int16_t channel, int16_t key, int32_t noteid,
     float velocity) SST_VOICEMANAGER_NONBLOCKING
 {
+    // key and sustain state is indexed by port/channel/key, so release each concrete match
+    if (port < 0 || channel < 0 || key < 0)
+    {
+        auto &targets = details.wildcardOffTargets;
+        targets.clear();
+        for (auto &vi : details.voiceInfo)
+        {
+            if (vi.matches(port, channel, key, noteid) && vi.port >= 0 && vi.channel >= 0 &&
+                vi.channel < 16 && vi.key >= 0 && vi.key < 128)
+            {
+                targets.insert(((uint64_t)(uint16_t)vi.port << 32) |
+                               ((uint64_t)(uint16_t)vi.channel << 16) | (uint16_t)vi.key);
+            }
+        }
+        for (auto t : targets)
+        {
+            processNoteOffEvent((int16_t)(t >> 32), (int16_t)((t >> 16) & 0xFFFF),
+                                (int16_t)(t & 0xFFFF), noteid, velocity);
+        }
+        return;
+    }
+
     if (channel >= 0 && channel < 16 && key >= 0 && key < 128)
         heldMIDIKeyByChannel[channel][key] = false;
 
