@@ -64,6 +64,7 @@ if (${bldtest})
             tests/voice_ids.cpp
             tests/continuation_data.cpp
             tests/multi_port.cpp
+            tests/wildcard_note_off.cpp
         )
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")

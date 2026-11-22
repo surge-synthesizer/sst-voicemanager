@@ -13,7 +13,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            name: linux gcc12
+            name: linux gcc14
             testExe: build/sst-voicemanager-test
 
           - os: ubuntu-latest
@@ -37,11 +37,11 @@ jobs:
         with:
           submodules: recursive
 
-      - name: pick GCC12
+      - name: pick GCC14
         if: runner.os == 'Linux'
         run: |
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 12
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 12
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 14
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 14
 
       - name: Setup RTSAN
         if: ${{ matrix.installClang }}
