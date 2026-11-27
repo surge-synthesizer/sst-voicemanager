@@ -586,6 +586,12 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             // So now begin end voice transaction
             auto voicesToBeLaunched = vm.responder.beginVoiceCreationTransaction(
                 voiceBeginWorkingBuffer, port, dch, dk, dnid, dvel);
+            if (voicesToBeLaunched == 0)
+            {
+                // the held key may no longer map to anything; it stays held in key state
+                vm.responder.endVoiceCreationTransaction(port, dch, dk, dnid, dvel);
+                return;
+            }
             for (int i = 0; i < voicesToBeLaunched; ++i)
             {
                 voiceInitInstructionsBuffer[i] = {};
@@ -604,12 +610,20 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
             auto voicesLeft = vm.responder.initializeMultipleVoices(
                 voicesToBeLaunched, voiceInitInstructionsBuffer, voiceInitWorkingBuffer, port, dch,
                 dk, dnid, dvel, 0.f);
+            if (voicesLeft <= 0)
+            {
+                // all skipped or refused, so there is nothing to place
+                vm.responder.endVoiceCreationTransaction(port, dch, dk, dnid, dvel);
+                return;
+            }
             auto idx = 0;
-            while (!voiceInitWorkingBuffer[idx].voice)
+            while (idx < voicesToBeLaunched && !voiceInitWorkingBuffer[idx].voice)
                 idx++;
 
             for (auto &vi : voiceInfo)
             {
+                if (idx >= voicesToBeLaunched)
+                    break;
                 if (!vi.activeVoiceCookie)
                 {
                     vi.voiceCounter = mostRecentVoiceCounter++;
@@ -642,7 +656,7 @@ struct VoiceManager<Cfg, Responder, MonoResponder>::Details
                         break;
                     }
                     idx++;
-                    while (!voiceInitWorkingBuffer[idx].voice)
+                    while (idx < voicesToBeLaunched && !voiceInitWorkingBuffer[idx].voice)
                         idx++;
                 }
             }
